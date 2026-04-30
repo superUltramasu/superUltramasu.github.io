@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>自治体都道府県クイズ</title>
+    <link rel="stylesheet" href="./styles.css">
+  </head>
+  <body>
+    <main class="app-shell">
+      <section class="quiz-panel" aria-labelledby="app-title">
+        <header class="topbar">
+          <div>
+            <p class="eyebrow">Municipality Prefecture Quiz</p>
+            <h1 id="app-title">自治体都道府県クイズ</h1>
+          </div>
+          <div class="scoreboard" aria-label="スコア">
+            <div>
+              <span id="score">0</span>
+              <small>正解</small>
+            </div>
+            <div>
+              <span id="currentNo">0</span>
+              <small>問題</small>
+            </div>
+            <div>
+              <span id="totalNo">0</span>
+              <small>全体</small>
+            </div>
+          </div>
+        </header>
+
+        <section id="setupView" class="setup-view" aria-label="クイズ設定">
+          <div class="setup-grid">
+            <fieldset class="setting-group">
+              <legend>地方</legend>
+              <div id="regionOptions" class="choice-grid region-grid"></div>
+            </fieldset>
+
+            <fieldset class="setting-group">
+              <legend>市区町村</legend>
+              <div class="type-grid">
+                <label><input type="checkbox" name="municipalityType" value="市" checked> 市</label>
+                <label><input type="checkbox" name="municipalityType" value="区"> 区</label>
+                <label><input type="checkbox" name="municipalityType" value="町"> 町</label>
+                <label><input type="checkbox" name="municipalityType" value="村"> 村</label>
+              </div>
+            </fieldset>
+
+            <fieldset class="setting-group">
+              <legend>問題数</legend>
+              <div class="question-count-row">
+                <select id="questionCount" aria-label="問題数"></select>
+                <span id="availableCount" class="available-count"></span>
+              </div>
+              <p id="setupMessage" class="setup-message" aria-live="polite"></p>
+            </fieldset>
+          </div>
+
+          <div class="setup-actions">
+            <button id="startButton" class="primary-button" type="button">クイズを始める</button>
+          </div>
+        </section>
+
+        <section id="quizView" class="quiz-view hidden" aria-label="クイズ">
+          <div class="question-area">
+            <div class="map-card" aria-hidden="true">
+              <svg viewBox="0 0 180 220" role="img">
+                <path d="M118 12c14 8 15 23 6 34-8 10-9 19-4 31 5 13-1 28-14 34-13 7-18 17-13 31 5 15-4 28-19 30-12 2-19 10-21 22-2 10-9 15-18 12-9-3-11-12-5-22 6-10 3-17-7-24-11-8-11-21 1-28 12-7 15-16 8-29-7-13-2-25 11-31 13-6 18-15 14-29-4-15 5-27 20-29 13-2 26-11 41-2Z"/>
+                <circle cx="130" cy="49" r="7"/>
+                <circle cx="104" cy="108" r="7"/>
+                <circle cx="75" cy="159" r="7"/>
+              </svg>
+            </div>
+            <div class="question-copy">
+              <p class="prompt">この自治体がある都道府県は？</p>
+              <div id="municipality" class="municipality" aria-live="polite">読み込み中</div>
+              <p id="feedback" class="feedback" aria-live="polite"></p>
+            </div>
+          </div>
+
+          <section class="controls" aria-label="クイズ操作">
+            <button id="nextButton" class="primary-button" type="button">次の問題</button>
+            <button id="backToSetupButton" class="secondary-button" type="button">設定に戻る</button>
+          </section>
+
+          <section class="options-wrap" aria-label="都道府県の選択肢">
+            <div id="options" class="options-grid"></div>
+          </section>
+        </section>
+
+        <section id="resultView" class="result-view hidden" aria-label="結果">
+          <div class="result-summary">
+            <p class="prompt">結果</p>
+            <div id="resultRate" class="result-rate">0%</div>
+            <p id="resultScore" class="result-score">0問中0問正解</p>
+          </div>
+
+          <section class="wrong-section" aria-labelledby="wrongTitle">
+            <h2 id="wrongTitle">不正解の問題</h2>
+            <ul id="wrongList" class="wrong-list"></ul>
+          </section>
+
+          <div class="setup-actions">
+            <button id="retryButton" class="primary-button" type="button">同じ条件でもう一度</button>
+            <button id="resultSetupButton" class="secondary-button" type="button">設定に戻る</button>
+          </div>
+        </section>
+      </section>
+    </main>
+
+    <script src="./municipality-data.js"></script>
+    <script src="./app.js"></script>
+  </body>
+</html>
