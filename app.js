@@ -38,7 +38,6 @@ const feedbackEl = document.querySelector("#feedback");
 const scoreEl = document.querySelector("#score");
 const currentNoEl = document.querySelector("#currentNo");
 const totalNoEl = document.querySelector("#totalNo");
-const nextButton = document.querySelector("#nextButton");
 const resultRateEl = document.querySelector("#resultRate");
 const resultScoreEl = document.querySelector("#resultScore");
 const wrongListEl = document.querySelector("#wrongList");
@@ -181,13 +180,8 @@ function setOptionsDisabled(disabled) {
   });
 }
 
-function prepareForAnswering() {
-  nextButton.textContent = "次の問題";
-  nextButton.disabled = true;
-  setOptionsDisabled(false);
-}
-
-function nextQuestion() {
+function nextQuestion(options = {}) {
+  const { keepFeedback = false } = options;
   currentQuestion = questionPool[answered] ?? null;
   locked = false;
 
@@ -201,9 +195,11 @@ function nextQuestion() {
   }
 
   municipalityEl.textContent = currentQuestion.name;
-  feedbackEl.textContent = "";
-  feedbackEl.className = "feedback";
-  prepareForAnswering();
+  if (!keepFeedback) {
+    feedbackEl.textContent = "";
+    feedbackEl.className = "feedback";
+  }
+  setOptionsDisabled(false);
   updateScoreboard();
 }
 
@@ -235,9 +231,8 @@ function answer(selectedPrefecture, selectedButton) {
 
   answered += 1;
   setOptionsDisabled(true);
-  nextButton.disabled = false;
-  nextButton.textContent = answered >= questionPool.length ? "結果を見る" : "次の問題";
   updateScoreboard();
+  nextQuestion({ keepFeedback: true });
 }
 
 function startQuiz() {
@@ -296,20 +291,11 @@ function backToSetup() {
   updateQuestionCountOptions();
 }
 
-function handleNextButton() {
-  if (answered >= questionPool.length && locked) {
-    showResult();
-  } else {
-    nextQuestion();
-  }
-}
-
 typeCheckboxes.forEach((checkbox) => {
   checkbox.addEventListener("change", updateQuestionCountOptions);
 });
 
 startButton.addEventListener("click", startQuiz);
-nextButton.addEventListener("click", handleNextButton);
 backToSetupButton.addEventListener("click", backToSetup);
 retryButton.addEventListener("click", startQuiz);
 resultSetupButton.addEventListener("click", backToSetup);
