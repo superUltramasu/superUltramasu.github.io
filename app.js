@@ -49,6 +49,7 @@ let score = 0;
 let answered = 0;
 let locked = false;
 let wrongAnswers = [];
+let selectedCorrectPrefectures = [];
 
 function getMunicipalityData() {
   return Array.isArray(window.municipalityData) ? window.municipalityData : [];
@@ -85,12 +86,42 @@ function selectedTypes() {
     .map((checkbox) => checkbox.value);
 }
 
-function availableQuestions() {
+function matchingMunicipalities() {
   const prefs = selectedPrefectures();
   const types = selectedTypes();
   return getMunicipalityData().filter((item) => (
     prefs.includes(item.prefecture) && types.includes(item.type)
   ));
+}
+
+function formatPrefectureList(prefectureList) {
+  return prefectureList.join("、");
+}
+
+function buildQuestions(items) {
+  const groups = new Map();
+  items.forEach((item) => {
+    if (!groups.has(item.name)) {
+      groups.set(item.name, {
+        name: item.name,
+        prefectures: []
+      });
+    }
+
+    const group = groups.get(item.name);
+    if (!group.prefectures.includes(item.prefecture)) {
+      group.prefectures.push(item.prefecture);
+    }
+  });
+
+  return [...groups.values()].map((question) => ({
+    ...question,
+    prefectures: prefectures.filter((prefecture) => question.prefectures.includes(prefecture))
+  }));
+}
+
+function availableQuestions() {
+  return buildQuestions(matchingMunicipalities());
 }
 
 function questionCountChoices(max) {
@@ -184,6 +215,7 @@ function nextQuestion(options = {}) {
   const { keepFeedback = false } = options;
   currentQuestion = questionPool[answered] ?? null;
   locked = false;
+  selectedCorrectPrefectures = [];
 
   document.querySelectorAll(".pref-button").forEach((button) => {
     button.classList.remove("correct", "wrong");
@@ -205,25 +237,38 @@ function nextQuestion(options = {}) {
 
 function answer(selectedPrefecture, selectedButton) {
   if (locked || !currentQuestion) return;
-  locked = true;
-  const correct = selectedPrefecture === currentQuestion.prefecture;
+  if (selectedCorrectPrefectures.includes(selectedPrefecture)) return;
+  const correct = currentQuestion.prefectures.includes(selectedPrefecture);
+  const correctText = formatPrefectureList(currentQuestion.prefectures);
 
   if (correct) {
-    score += 1;
+    selectedCorrectPrefectures.push(selectedPrefecture);
     selectedButton.classList.add("correct");
-    feedbackEl.textContent = `正解です。${currentQuestion.name}は${currentQuestion.prefecture}です。`;
-    feedbackEl.classList.add("correct");
+    selectedButton.disabled = true;
+
+    if (selectedCorrectPrefectures.length < currentQuestion.prefectures.length) {
+      feedbackEl.textContent = "";
+      feedbackEl.className = "feedback";
+      updateScoreboard();
+      return;
+    }
+
+    locked = true;
+    score += 1;
+    feedbackEl.textContent = `正解です。${currentQuestion.name}は${correctText}です。`;
+    feedbackEl.className = "feedback correct";
   } else {
+    locked = true;
     selectedButton.classList.add("wrong");
-    feedbackEl.textContent = `惜しいです。正解は${currentQuestion.prefecture}です。`;
-    feedbackEl.classList.add("wrong");
+    feedbackEl.textContent = `残念！${currentQuestion.name}は${correctText}でした。`;
+    feedbackEl.className = "feedback wrong";
     wrongAnswers.push({
       name: currentQuestion.name,
       selected: selectedPrefecture,
-      correct: currentQuestion.prefecture
+      correct: correctText
     });
     document.querySelectorAll(".pref-button").forEach((button) => {
-      if (button.textContent === currentQuestion.prefecture) {
+      if (currentQuestion.prefectures.includes(button.textContent)) {
         button.classList.add("correct");
       }
     });
@@ -243,6 +288,7 @@ function startQuiz() {
   score = 0;
   answered = 0;
   wrongAnswers = [];
+  selectedCorrectPrefectures = [];
   currentQuestion = null;
   renderOptions();
   showView("quiz");
@@ -287,6 +333,7 @@ function backToSetup() {
   score = 0;
   answered = 0;
   wrongAnswers = [];
+  selectedCorrectPrefectures = [];
   updateScoreboard();
   updateQuestionCountOptions();
 }
