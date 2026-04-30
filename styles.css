@@ -157,7 +157,8 @@ h1 {
   cursor: pointer;
 }
 
-input[type="checkbox"] {
+input[type="checkbox"],
+input[type="radio"] {
   width: 18px;
   height: 18px;
   accent-color: var(--accent);

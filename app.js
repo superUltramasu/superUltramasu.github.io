@@ -21,6 +21,8 @@ const regions = {
 };
 
 const regionOptionsEl = document.querySelector("#regionOptions");
+const quizModeRadios = [...document.querySelectorAll('input[name="quizMode"]')];
+const municipalityTypeGroupEl = document.querySelector("#municipalityTypeGroup");
 const typeCheckboxes = [...document.querySelectorAll('input[name="municipalityType"]')];
 const questionCountEl = document.querySelector("#questionCount");
 const availableCountEl = document.querySelector("#availableCount");
@@ -31,8 +33,10 @@ const resultViewEl = document.querySelector("#resultView");
 const startButton = document.querySelector("#startButton");
 const backToSetupButton = document.querySelector("#backToSetupButton");
 const retryButton = document.querySelector("#retryButton");
+const reviewButton = document.querySelector("#reviewButton");
 const resultSetupButton = document.querySelector("#resultSetupButton");
 const municipalityEl = document.querySelector("#municipality");
+const quizPromptEl = document.querySelector("#quizPrompt");
 const optionsEl = document.querySelector("#options");
 const feedbackEl = document.querySelector("#feedback");
 const scoreEl = document.querySelector("#score");
@@ -50,9 +54,19 @@ let answered = 0;
 let locked = false;
 let wrongAnswers = [];
 let selectedCorrectPrefectures = [];
+let reviewMode = false;
+let resultReviewQuestions = [];
+
+function currentQuizMode() {
+  return document.querySelector('input[name="quizMode"]:checked')?.value ?? "municipality";
+}
 
 function getMunicipalityData() {
   return Array.isArray(window.municipalityData) ? window.municipalityData : [];
+}
+
+function getAreaCodeData() {
+  return Array.isArray(window.areaCodeData) ? window.areaCodeData : [];
 }
 
 function renderRegionOptions() {
@@ -84,6 +98,13 @@ function selectedTypes() {
   return typeCheckboxes
     .filter((checkbox) => checkbox.checked)
     .map((checkbox) => checkbox.value);
+}
+
+function matchingAreaCodes() {
+  const prefs = selectedPrefectures();
+  return getAreaCodeData().filter((item) => (
+    item.prefectures.some((prefecture) => prefs.includes(prefecture))
+  ));
 }
 
 function matchingMunicipalities() {
@@ -121,6 +142,13 @@ function buildQuestions(items) {
 }
 
 function availableQuestions() {
+  if (currentQuizMode() === "areaCode") {
+    return matchingAreaCodes().map((item) => ({
+      name: item.code,
+      prefectures: item.answers
+    }));
+  }
+
   return buildQuestions(matchingMunicipalities());
 }
 
@@ -137,6 +165,7 @@ function updateQuestionCountOptions() {
   const previousValue = Number(questionCountEl.value);
   const regionCount = selectedRegionNames().length;
   const typeCount = selectedTypes().length;
+  const areaCodeMode = currentQuizMode() === "areaCode";
   const count = availableQuestions().length;
   const choices = questionCountChoices(count);
   questionCountEl.innerHTML = "";
@@ -155,18 +184,21 @@ function updateQuestionCountOptions() {
   }
 
   availableCountEl.textContent = `出題可能: ${count}問`;
-  const canStart = regionCount > 0 && typeCount > 0 && count > 0;
+  municipalityTypeGroupEl.classList.toggle("hidden", areaCodeMode);
+  const canStart = regionCount > 0 && (areaCodeMode || typeCount > 0) && count > 0;
   startButton.disabled = !canStart;
   questionCountEl.disabled = !canStart;
 
   if (regionCount === 0) {
     setupMessageEl.textContent = "地方を1つ以上選んでください。";
-  } else if (typeCount === 0) {
+  } else if (!areaCodeMode && typeCount === 0) {
     setupMessageEl.textContent = "市区町村を1つ以上選んでください。";
   } else if (count === 0) {
     setupMessageEl.textContent = "選択条件に合う自治体がありません。条件を変更してください。";
   } else {
-    setupMessageEl.textContent = "条件を選んで開始してください。";
+    setupMessageEl.textContent = areaCodeMode
+      ? "市外局番クイズの条件を選んで開始してください。"
+      : "条件を選んで開始してください。";
   }
   setupMessageEl.classList.toggle("error", !canStart);
 }
@@ -205,6 +237,17 @@ function renderOptions() {
   });
 }
 
+function answerCandidatesForCurrentMode() {
+  if (currentQuizMode() === "areaCode") {
+    const prefs = selectedPrefectures();
+    return getAreaCodeData()
+      .filter((item) => item.prefectures.some((prefecture) => prefs.includes(prefecture)))
+      .flatMap((item) => item.answers);
+  }
+
+  return selectedPrefectures();
+}
+
 function setOptionsDisabled(disabled) {
   document.querySelectorAll(".pref-button").forEach((button) => {
     button.disabled = disabled;
@@ -227,6 +270,9 @@ function nextQuestion(options = {}) {
   }
 
   municipalityEl.textContent = currentQuestion.name;
+  quizPromptEl.textContent = currentQuizMode() === "areaCode"
+    ? "この市外局番が使われている代表地域は？"
+    : "この自治体がある都道府県は？";
   if (!keepFeedback) {
     feedbackEl.textContent = "";
     feedbackEl.className = "feedback";
@@ -265,7 +311,11 @@ function answer(selectedPrefecture, selectedButton) {
     wrongAnswers.push({
       name: currentQuestion.name,
       selected: selectedPrefecture,
-      correct: correctText
+      correct: correctText,
+      question: {
+        name: currentQuestion.name,
+        prefectures: [...currentQuestion.prefectures]
+      }
     });
     document.querySelectorAll(".pref-button").forEach((button) => {
       if (currentQuestion.prefectures.includes(button.textContent)) {
@@ -280,28 +330,51 @@ function answer(selectedPrefecture, selectedButton) {
   nextQuestion({ keepFeedback: true });
 }
 
-function startQuiz() {
-  const candidates = shuffle(availableQuestions());
-  const count = Number(questionCountEl.value);
-  questionPool = candidates.slice(0, count);
-  optionPrefectures = selectedPrefectures();
+function startQuestionSet(questions, options = {}) {
+  const { isReview = false } = options;
+  questionPool = questions;
   score = 0;
   answered = 0;
   wrongAnswers = [];
   selectedCorrectPrefectures = [];
+  reviewMode = isReview;
+  resultReviewQuestions = [];
   currentQuestion = null;
   renderOptions();
   showView("quiz");
   nextQuestion();
 }
 
+function startQuiz() {
+  const candidates = shuffle(availableQuestions());
+  const count = Number(questionCountEl.value);
+  optionPrefectures = [...new Set(answerCandidatesForCurrentMode())];
+  startQuestionSet(candidates.slice(0, count));
+}
+
+function startReview() {
+  if (resultReviewQuestions.length === 0) return;
+  startQuestionSet(shuffle(resultReviewQuestions), { isReview: true });
+}
+
 function showResult() {
   currentQuestion = null;
   locked = true;
+  resultReviewQuestions = reviewMode
+    ? questionPool.map((question) => ({
+      name: question.name,
+      prefectures: [...question.prefectures]
+    }))
+    : wrongAnswers.map((wrong) => ({
+      name: wrong.question.name,
+      prefectures: [...wrong.question.prefectures]
+    }));
+
   const total = questionPool.length;
   const rate = total === 0 ? 0 : Math.round((score / total) * 1000) / 10;
   resultRateEl.textContent = `${rate}%`;
   resultScoreEl.textContent = `${total}問中${score}問正解`;
+  reviewButton.disabled = resultReviewQuestions.length === 0;
   wrongListEl.innerHTML = "";
 
   if (wrongAnswers.length === 0) {
@@ -334,6 +407,8 @@ function backToSetup() {
   answered = 0;
   wrongAnswers = [];
   selectedCorrectPrefectures = [];
+  reviewMode = false;
+  resultReviewQuestions = [];
   updateScoreboard();
   updateQuestionCountOptions();
 }
@@ -342,9 +417,14 @@ typeCheckboxes.forEach((checkbox) => {
   checkbox.addEventListener("change", updateQuestionCountOptions);
 });
 
+quizModeRadios.forEach((radio) => {
+  radio.addEventListener("change", updateQuestionCountOptions);
+});
+
 startButton.addEventListener("click", startQuiz);
 backToSetupButton.addEventListener("click", backToSetup);
 retryButton.addEventListener("click", startQuiz);
+reviewButton.addEventListener("click", startReview);
 resultSetupButton.addEventListener("click", backToSetup);
 
 renderRegionOptions();

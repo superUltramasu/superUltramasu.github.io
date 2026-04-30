@@ -33,11 +33,19 @@
         <section id="setupView" class="setup-view" aria-label="クイズ設定">
           <div class="setup-grid">
             <fieldset class="setting-group">
+              <legend>クイズ</legend>
+              <div class="type-grid">
+                <label><input type="radio" name="quizMode" value="municipality" checked> 自治体 → 都道府県</label>
+                <label><input type="radio" name="quizMode" value="areaCode"> 市外局番 → 地域</label>
+              </div>
+            </fieldset>
+
+            <fieldset class="setting-group">
               <legend>地方</legend>
               <div id="regionOptions" class="choice-grid region-grid"></div>
             </fieldset>
 
-            <fieldset class="setting-group">
+            <fieldset id="municipalityTypeGroup" class="setting-group">
               <legend>市区町村</legend>
               <div class="type-grid">
                 <label><input type="checkbox" name="municipalityType" value="市" checked> 市</label>
@@ -73,7 +81,7 @@
               </svg>
             </div>
             <div class="question-copy">
-              <p class="prompt">この自治体がある都道府県は？</p>
+              <p id="quizPrompt" class="prompt">この自治体がある都道府県は？</p>
               <div id="municipality" class="municipality" aria-live="polite">読み込み中</div>
               <p id="feedback" class="feedback" aria-live="polite"></p>
             </div>
@@ -102,6 +110,7 @@
 
           <div class="setup-actions">
             <button id="retryButton" class="primary-button" type="button">同じ条件でもう一度</button>
+            <button id="reviewButton" class="secondary-button" type="button">復習する</button>
             <button id="resultSetupButton" class="secondary-button" type="button">設定に戻る</button>
           </div>
         </section>
@@ -109,6 +118,7 @@
     </main>
 
     <script src="./municipality-data.js"></script>
+    <script src="./area-code-data.js"></script>
     <script src="./app.js"></script>
   </body>
 </html>
