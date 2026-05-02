@@ -37,6 +37,7 @@
               <div class="type-grid">
                 <label><input type="radio" name="quizMode" value="municipality" checked> 自治体 → 都道府県</label>
                 <label><input type="radio" name="quizMode" value="areaCode"> 市外局番 → 地域</label>
+                <label><input type="radio" name="quizMode" value="diamond"> 横断歩道ダイヤ → 都道府県</label>
               </div>
             </fieldset>
 
@@ -83,6 +84,7 @@
             <div class="question-copy">
               <p id="quizPrompt" class="prompt">この自治体がある都道府県は？</p>
               <div id="municipality" class="municipality" aria-live="polite">読み込み中</div>
+              <img id="questionImage" class="question-image hidden" src="" alt="">
               <p id="feedback" class="feedback" aria-live="polite"></p>
             </div>
           </div>
@@ -119,6 +121,7 @@
 
     <script src="./municipality-data.js"></script>
     <script src="./area-code-data.js"></script>
+    <script src="./diamond-data.js"></script>
     <script src="./app.js"></script>
   </body>
 </html>

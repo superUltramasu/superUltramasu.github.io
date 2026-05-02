@@ -255,6 +255,17 @@ select {
   word-break: keep-all;
 }
 
+.question-image {
+  width: min(340px, 100%);
+  max-height: 230px;
+  object-fit: contain;
+  display: block;
+  padding: 14px;
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
 .feedback {
   min-height: 30px;
   margin: 14px 0 0;
@@ -419,6 +430,17 @@ select {
 .wrong-name {
   color: var(--ink);
   font-weight: 900;
+}
+
+.wrong-question-image {
+  width: 112px;
+  max-height: 72px;
+  object-fit: contain;
+  justify-self: start;
+  padding: 6px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #f9fbfa;
 }
 
 .empty-result {
