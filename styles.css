@@ -17,6 +17,10 @@
   box-sizing: border-box;
 }
 
+path {
+  vector-effect: non-scaling-stroke;
+}
+
 body {
   min-height: 100vh;
   margin: 0;
@@ -33,7 +37,7 @@ select {
 }
 
 .hidden {
-  display: none;
+  display: none !important;
 }
 
 .app-shell {
@@ -210,31 +214,8 @@ select {
 }
 
 .question-area {
-  display: grid;
-  grid-template-columns: 170px 1fr;
-  gap: 28px;
-  align-items: center;
+  display: block;
   padding: 30px;
-}
-
-.map-card {
-  width: 150px;
-  aspect-ratio: 1 / 1.18;
-  display: grid;
-  place-items: center;
-  background: #ecf4f0;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-}
-
-.map-card svg {
-  width: 78%;
-  height: 78%;
-  fill: #315f54;
-}
-
-.map-card circle {
-  fill: var(--gold);
 }
 
 .prompt {
@@ -264,6 +245,49 @@ select {
   background: #fff;
   border: 1px solid var(--line);
   border-radius: 8px;
+}
+
+.map-question {
+  width: min(720px, 100%);
+  min-height: 360px;
+  display: grid;
+  place-items: center;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #f9fbfa;
+}
+
+.map-question svg {
+  width: 100%;
+  max-height: 560px;
+}
+
+.map-composite {
+  display: block;
+  background: #fff;
+  border-radius: 6px;
+}
+
+.map-divider {
+  fill: none;
+  stroke: #343a37;
+  stroke-width: 1.2;
+  vector-effect: non-scaling-stroke;
+}
+
+.map-area {
+  fill: #fff982;
+  stroke: #17211e;
+  stroke-width: 0.5;
+  vector-effect: non-scaling-stroke;
+}
+
+.map-target {
+  fill: #1c36f2;
+  stroke: #17211e;
+  stroke-width: 0.8;
+  vector-effect: non-scaling-stroke;
 }
 
 .feedback {
@@ -470,16 +494,11 @@ select {
   }
 
   .question-area {
-    grid-template-columns: 1fr;
-    gap: 18px;
+    display: block;
   }
 
   .type-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .map-card {
-    width: 108px;
   }
 
   .municipality {
