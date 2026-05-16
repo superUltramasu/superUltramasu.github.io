@@ -12,6 +12,25 @@
 
 参照元: https://www.soumu.go.jp/main_content/001072440.pdf
 
+## 市区町村の読みについて
+
+正誤メッセージで表示する市区町村の読みは、e-Stat 統計ダッシュボード API の地域情報を参照して作成しています。
+
+参照元: https://dashboard.e-stat.go.jp/api/1.0/Json/getRegionInfo
+
+## 国立大学データについて
+
+国立大学名クイズの大学名と所在地は、文部科学省の「令和6年度全国大学一覧」に含まれる「01国立大学一覧」を参照して作成しています。東京医科歯科大学と東京工業大学は令和6年10月1日に東京科学大学へ統合されたため、クイズでは東京科学大学として扱っています。
+
+参照元: https://www.mext.go.jp/a_menu/koutou/ichiran/mext_00038.html
+東京科学大学: https://www.isct.ac.jp/ja/news/aoldn2aafk3r
+
+## 公立大学・私立大学データについて
+
+公立大学名クイズと私立大学名クイズの大学名と所在地は、文部科学省の「令和6年度全国大学一覧」に含まれる「02公立大学一覧」と「03-1～03-8私立大学一覧」を参照して作成しています。
+
+参照元: https://www.mext.go.jp/a_menu/koutou/ichiran/mext_00038.html
+
 ## 地図データについて
 
 地図クイズでは、`map-quiz-data.js` 内で jpn-atlas の日本市区町村境界 TopoJSON と、ウェザーニューズの市区町村コード一覧を使用しています。

@@ -88,6 +88,30 @@ function getAreaCodeMapData() {
   return Array.isArray(window.areaCodeMapData) ? window.areaCodeMapData : [];
 }
 
+function getNationalUniversityData() {
+  return Array.isArray(window.nationalUniversityData) ? window.nationalUniversityData : [];
+}
+
+function getPublicUniversityData() {
+  return Array.isArray(window.publicUniversityData) ? window.publicUniversityData : [];
+}
+
+function getPrivateUniversityData() {
+  return Array.isArray(window.privateUniversityData) ? window.privateUniversityData : [];
+}
+
+function getMunicipalityReadings() {
+  return window.municipalityReadings && typeof window.municipalityReadings === "object"
+    ? window.municipalityReadings
+    : {};
+}
+
+function getMunicipalityReadingEntries() {
+  return Object.entries(getMunicipalityReadings())
+    .filter(([name, reading]) => name.length > 1 && typeof reading === "string" && reading.length > 0)
+    .sort((a, b) => b[0].length - a[0].length);
+}
+
 function renderRegionOptions() {
   regionOptionsEl.innerHTML = "";
   const mapMode = currentQuizMode() === "map" || currentQuizMode() === "mapAreaCode";
@@ -153,6 +177,38 @@ function matchingMunicipalities() {
   return getMunicipalityData().filter((item) => (
     prefs.includes(item.prefecture) && types.includes(item.type)
   ));
+}
+
+function matchingNationalUniversities() {
+  const prefs = selectedPrefectures();
+  return getNationalUniversityData().filter((item) => prefs.includes(item.prefecture));
+}
+
+function matchingPublicUniversities() {
+  const prefs = selectedPrefectures();
+  return getPublicUniversityData().filter((item) => prefs.includes(item.prefecture));
+}
+
+function matchingPrivateUniversities() {
+  const prefs = selectedPrefectures();
+  return getPrivateUniversityData().filter((item) => prefs.includes(item.prefecture));
+}
+
+function isUniversityMode(quizMode = currentQuizMode()) {
+  return quizMode === "nationalUniversity" || quizMode === "publicUniversity" || quizMode === "privateUniversity";
+}
+
+function matchingUniversitiesForCurrentMode() {
+  const quizMode = currentQuizMode();
+  if (quizMode === "publicUniversity") return matchingPublicUniversities();
+  if (quizMode === "privateUniversity") return matchingPrivateUniversities();
+  return matchingNationalUniversities();
+}
+
+function universityCategoryLabel(quizMode = currentQuizMode()) {
+  if (quizMode === "publicUniversity") return "公立大学";
+  if (quizMode === "privateUniversity") return "私立大学";
+  return "国立大学";
 }
 
 function matchingMapMunicipalities() {
@@ -448,6 +504,54 @@ function formatPrefectureList(prefectureList) {
   return prefectureList.join("、");
 }
 
+function normalizedMunicipalityName(name) {
+  return name.replace(/（[^）]+）/g, "");
+}
+
+function stripMunicipalitySuffixReading(name, reading) {
+  const suffixes = [
+    ["市", "し"],
+    ["区", "く"],
+    ["町", "ちょう"],
+    ["町", "まち"],
+    ["村", "そん"],
+    ["村", "むら"]
+  ];
+  for (const [nameSuffix, readingSuffix] of suffixes) {
+    if (name.endsWith(nameSuffix) && reading.endsWith(readingSuffix)) {
+      return {
+        stem: name.slice(0, -nameSuffix.length),
+        suffix: nameSuffix,
+        reading: reading.slice(0, -readingSuffix.length)
+      };
+    }
+  }
+  return { stem: name, suffix: "", reading };
+}
+
+function formatMunicipalityWithReading(name) {
+  const readings = getMunicipalityReadings();
+  const reading = readings[name] ?? readings[normalizedMunicipalityName(name)];
+  if (!reading) return name;
+  const parts = stripMunicipalitySuffixReading(name, reading);
+  return `${parts.stem}（${parts.reading}）${parts.suffix}`;
+}
+
+function formatRegionNameForFeedback(name) {
+  const readings = getMunicipalityReadings();
+  if (readings[name] || readings[normalizedMunicipalityName(name)]) {
+    return formatMunicipalityWithReading(name);
+  }
+  return getMunicipalityReadingEntries().reduce((text, [municipalityName]) => {
+    if (!text.includes(municipalityName)) return text;
+    return text.split(municipalityName).join(formatMunicipalityWithReading(municipalityName));
+  }, name);
+}
+
+function formatAnswerListForFeedback(answerList) {
+  return answerList.map(formatRegionNameForFeedback).join("、");
+}
+
 function buildQuestions(items) {
   const groups = new Map();
   items.forEach((item) => {
@@ -494,6 +598,13 @@ function availableQuestions() {
     return matchingMapAreaCodes();
   }
 
+  if (isUniversityMode()) {
+    return matchingUniversitiesForCurrentMode().map((item) => ({
+      name: item.name,
+      prefectures: [item.location]
+    }));
+  }
+
   return buildQuestions(matchingMunicipalities());
 }
 
@@ -513,6 +624,8 @@ function updateQuestionCountOptions() {
   const quizMode = currentQuizMode();
   const areaCodeMode = quizMode === "areaCode";
   const municipalityMode = quizMode === "municipality" || quizMode === "map" || quizMode === "mapAreaCode";
+  const universityMode = isUniversityMode(quizMode);
+  const universityLabel = universityCategoryLabel(quizMode);
   const count = availableQuestions().length;
   const choices = questionCountChoices(count);
   questionCountEl.innerHTML = "";
@@ -543,7 +656,9 @@ function updateQuestionCountOptions() {
   } else if (municipalityMode && typeCount === 0) {
     setupMessageEl.textContent = "市区町村を1つ以上選んでください。";
   } else if (count === 0) {
-    setupMessageEl.textContent = "選択条件に合う自治体がありません。条件を変更してください。";
+    setupMessageEl.textContent = universityMode
+      ? `選択条件に合う${universityLabel}がありません。条件を変更してください。`
+      : "選択条件に合う自治体がありません。条件を変更してください。";
   } else {
     setupMessageEl.textContent = areaCodeMode
       ? "市外局番クイズの条件を選んで開始してください。"
@@ -553,6 +668,8 @@ function updateQuestionCountOptions() {
           ? "地図クイズの条件を選んで開始してください。"
         : quizMode === "mapAreaCode"
           ? "地図市外局番クイズの条件を選んで開始してください。"
+        : universityMode
+          ? `${universityLabel}名クイズの条件を選んで開始してください。`
         : "条件を選んで開始してください。";
   }
   setupMessageEl.classList.toggle("error", !canStart);
@@ -612,6 +729,10 @@ function answerCandidatesForCurrentMode() {
     return matchingMapAreaCodes().map((item) => item.name);
   }
 
+  if (isUniversityMode()) {
+    return matchingUniversitiesForCurrentMode().map((item) => item.location);
+  }
+
   return selectedPrefectures();
 }
 
@@ -665,6 +786,8 @@ function nextQuestion(options = {}) {
         ? "赤色で示された市区町村は？"
       : quizMode === "mapAreaCode"
         ? "青色で示された地域の市外局番は？"
+      : isUniversityMode(quizMode)
+        ? `この${universityCategoryLabel(quizMode)}の所在地は？`
       : "この自治体がある都道府県は？";
   if (!keepFeedback) {
     feedbackEl.textContent = "";
@@ -678,7 +801,11 @@ function answer(selectedPrefecture, selectedButton) {
   if (locked || !currentQuestion) return;
   if (selectedCorrectPrefectures.includes(selectedPrefecture)) return;
   const correct = currentQuestion.prefectures.includes(selectedPrefecture);
-  const correctText = formatPrefectureList(currentQuestion.prefectures);
+  const quizMode = currentQuizMode();
+  const correctText = quizMode === "map" || quizMode === "areaCode" || isUniversityMode(quizMode)
+    ? formatAnswerListForFeedback(currentQuestion.prefectures)
+    : formatPrefectureList(currentQuestion.prefectures);
+  const questionNameText = formatRegionNameForFeedback(currentQuestion.name);
 
   if (correct) {
     selectedCorrectPrefectures.push(selectedPrefecture);
@@ -694,24 +821,28 @@ function answer(selectedPrefecture, selectedButton) {
 
     locked = true;
     score += 1;
-    feedbackEl.textContent = currentQuizMode() === "diamond"
+    feedbackEl.textContent = quizMode === "diamond"
       ? `正解です。このダイヤは${correctText}です。`
-      : currentQuizMode() === "map"
+      : quizMode === "map"
         ? `正解です。赤色の場所は${correctText}です。`
-      : currentQuizMode() === "mapAreaCode"
+      : quizMode === "mapAreaCode"
         ? `正解です。青色の地域の市外局番は${correctText}です。`
-      : `正解です。${currentQuestion.name}は${correctText}です。`;
+      : isUniversityMode(quizMode)
+        ? `正解です。${currentQuestion.name}は${correctText}です。`
+      : `正解です。${questionNameText}は${correctText}です。`;
     feedbackEl.className = "feedback correct";
   } else {
     locked = true;
     selectedButton.classList.add("wrong");
-    feedbackEl.textContent = currentQuizMode() === "diamond"
+    feedbackEl.textContent = quizMode === "diamond"
       ? `残念！このダイヤは${correctText}でした。`
-      : currentQuizMode() === "map"
+      : quizMode === "map"
         ? `残念！赤色の場所は${correctText}でした。`
-      : currentQuizMode() === "mapAreaCode"
+      : quizMode === "mapAreaCode"
         ? `残念！青色の地域の市外局番は${correctText}でした。`
-      : `残念！${currentQuestion.name}は${correctText}でした。`;
+      : isUniversityMode(quizMode)
+        ? `残念！${currentQuestion.name}は${correctText}でした。`
+      : `残念！${questionNameText}は${correctText}でした。`;
     feedbackEl.className = "feedback wrong";
     wrongAnswers.push({
       name: currentQuestion.name,
