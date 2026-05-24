@@ -290,6 +290,20 @@ select {
   vector-effect: non-scaling-stroke;
 }
 
+.map-result-correct {
+  fill: #a7e957;
+  stroke: #123a1c;
+  stroke-width: 1.4;
+  vector-effect: non-scaling-stroke;
+}
+
+.map-result-wrong {
+  fill: #f05252;
+  stroke: #6f1414;
+  stroke-width: 1.6;
+  vector-effect: non-scaling-stroke;
+}
+
 .feedback {
   min-height: 30px;
   margin: 14px 0 0;
@@ -352,6 +366,27 @@ select {
 
 .options-wrap {
   padding: 0 30px 30px;
+}
+
+.answer-filter {
+  width: 100%;
+  min-height: 44px;
+  max-height: 44px;
+  resize: none;
+  margin: 0 0 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--ink);
+  font: inherit;
+  font-weight: 800;
+  line-height: 1.35;
+}
+
+.answer-filter:focus {
+  outline: 2px solid rgba(41, 125, 80, 0.24);
+  border-color: var(--green);
 }
 
 .options-grid {
@@ -428,6 +463,21 @@ select {
   letter-spacing: 0;
 }
 
+.result-map-summary {
+  display: grid;
+  gap: 8px;
+  margin: 0 0 18px;
+}
+
+.result-map-summary svg {
+  width: 100%;
+  max-height: 460px;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #f9fbfa;
+}
+
 .wrong-list {
   max-height: 360px;
   overflow: auto;
@@ -440,7 +490,7 @@ select {
 
 .wrong-list li {
   display: grid;
-  grid-template-columns: minmax(160px, 1fr) auto auto;
+  grid-template-columns: 1fr;
   gap: 10px;
   align-items: center;
   padding: 12px 14px;
@@ -449,6 +499,61 @@ select {
   background: #fff;
   color: var(--muted);
   font-weight: 800;
+}
+
+.wrong-detail {
+  display: grid;
+  grid-template-columns: minmax(160px, 1fr) auto auto;
+  gap: 10px;
+  align-items: center;
+}
+
+.wrong-map-item {
+  grid-template-columns: 1fr !important;
+}
+
+.wrong-map {
+  display: grid;
+  gap: 8px;
+  width: 100%;
+}
+
+.wrong-map svg {
+  width: 100%;
+  max-height: 300px;
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #f9fbfa;
+}
+
+.wrong-map-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  color: var(--muted);
+  font-size: 0.88rem;
+}
+
+.wrong-map-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.wrong-map-legend b {
+  width: 14px;
+  height: 14px;
+  border-radius: 3px;
+  border: 1px solid #17211e;
+}
+
+.legend-correct {
+  background: #a7e957;
+}
+
+.legend-wrong {
+  background: #f05252;
 }
 
 .wrong-name {
@@ -522,6 +627,10 @@ select {
   }
 
   .wrong-list li {
+    grid-template-columns: 1fr;
+  }
+
+  .wrong-detail {
     grid-template-columns: 1fr;
   }
 }

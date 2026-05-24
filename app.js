@@ -20,6 +20,56 @@ const regions = {
   "九州・沖縄": ["福岡県", "佐賀県", "長崎県", "熊本県", "大分県", "宮崎県", "鹿児島県", "沖縄県"]
 };
 
+const prefectureReadings = {
+  "北海道": "ほっかいどう",
+  "青森県": "あおもりけん",
+  "岩手県": "いわてけん",
+  "宮城県": "みやぎけん",
+  "秋田県": "あきたけん",
+  "山形県": "やまがたけん",
+  "福島県": "ふくしまけん",
+  "茨城県": "いばらきけん",
+  "栃木県": "とちぎけん",
+  "群馬県": "ぐんまけん",
+  "埼玉県": "さいたまけん",
+  "千葉県": "ちばけん",
+  "東京都": "とうきょうと",
+  "神奈川県": "かながわけん",
+  "新潟県": "にいがたけん",
+  "富山県": "とやまけん",
+  "石川県": "いしかわけん",
+  "福井県": "ふくいけん",
+  "山梨県": "やまなしけん",
+  "長野県": "ながのけん",
+  "岐阜県": "ぎふけん",
+  "静岡県": "しずおかけん",
+  "愛知県": "あいちけん",
+  "三重県": "みえけん",
+  "滋賀県": "しがけん",
+  "京都府": "きょうとふ",
+  "大阪府": "おおさかふ",
+  "兵庫県": "ひょうごけん",
+  "奈良県": "ならけん",
+  "和歌山県": "わかやまけん",
+  "鳥取県": "とっとりけん",
+  "島根県": "しまねけん",
+  "岡山県": "おかやまけん",
+  "広島県": "ひろしまけん",
+  "山口県": "やまぐちけん",
+  "徳島県": "とくしまけん",
+  "香川県": "かがわけん",
+  "愛媛県": "えひめけん",
+  "高知県": "こうちけん",
+  "福岡県": "ふくおかけん",
+  "佐賀県": "さがけん",
+  "長崎県": "ながさきけん",
+  "熊本県": "くまもとけん",
+  "大分県": "おおいたけん",
+  "宮崎県": "みやざきけん",
+  "鹿児島県": "かごしまけん",
+  "沖縄県": "おきなわけん"
+};
+
 const regionOptionsEl = document.querySelector("#regionOptions");
 const regionLegendEl = document.querySelector("#regionLegend");
 const quizModeRadios = [...document.querySelectorAll('input[name="quizMode"]')];
@@ -40,6 +90,7 @@ const municipalityEl = document.querySelector("#municipality");
 const quizPromptEl = document.querySelector("#quizPrompt");
 const questionImageEl = document.querySelector("#questionImage");
 const mapQuestionEl = document.querySelector("#mapQuestion");
+const answerFilterEl = document.querySelector("#answerFilter");
 const optionsEl = document.querySelector("#options");
 const feedbackEl = document.querySelector("#feedback");
 const scoreEl = document.querySelector("#score");
@@ -47,6 +98,7 @@ const currentNoEl = document.querySelector("#currentNo");
 const totalNoEl = document.querySelector("#totalNo");
 const resultRateEl = document.querySelector("#resultRate");
 const resultScoreEl = document.querySelector("#resultScore");
+const resultMapSummaryEl = document.querySelector("#resultMapSummary");
 const wrongListEl = document.querySelector("#wrongList");
 
 let questionPool = [];
@@ -56,6 +108,7 @@ let score = 0;
 let answered = 0;
 let locked = false;
 let wrongAnswers = [];
+let mapAnswerResults = [];
 let selectedCorrectPrefectures = [];
 let reviewMode = false;
 let resultReviewQuestions = [];
@@ -366,18 +419,32 @@ function sectionMapItems(mapItems, selectedPref) {
     });
 }
 
-function createMapSvg(mapItems, targetCodes, selectedPref, labelSuffix = "") {
+function mapPathClass(code, targetCodes, selectedCodes, resultMode) {
+  if (!resultMode) {
+    return targetCodes.has(code) ? "map-target" : "map-area";
+  }
+  if (selectedCodes.has(code)) return "map-result-wrong";
+  if (targetCodes.has(code)) return "map-result-correct";
+  return "map-area";
+}
+
+function appendMapPaths(parent, mapItems, targetCodes, selectedCodes, options = {}) {
+  const resultMode = options.resultMode ?? false;
+  mapItems.forEach((item) => {
+    const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+    path.setAttribute("d", item.path);
+    path.setAttribute("class", mapPathClass(item.code, targetCodes, selectedCodes, resultMode));
+    parent.appendChild(path);
+  });
+}
+
+function createMapSvg(mapItems, targetCodes, selectedPref, labelSuffix = "", selectedCodes = new Set(), options = {}) {
   const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
   svg.setAttribute("viewBox", mapBounds(mapItems.map((item) => item.path)));
   svg.setAttribute("role", "img");
   svg.setAttribute("aria-label", `${selectedPref}の地図${labelSuffix}`);
 
-  mapItems.forEach((item) => {
-    const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
-    path.setAttribute("d", item.path);
-    path.setAttribute("class", targetCodes.has(item.code) ? "map-target" : "map-area");
-    svg.appendChild(path);
-  });
+  appendMapPaths(svg, mapItems, targetCodes, selectedCodes, options);
 
   return svg;
 }
@@ -414,7 +481,7 @@ function mapCompositeLayout(selectedPref, sectionCount) {
   return layout.slice(0, sectionCount);
 }
 
-function appendInsetMap(parent, section, targetCodes, bounds) {
+function appendInsetMap(parent, section, targetCodes, bounds, selectedCodes = new Set(), options = {}) {
   const inset = document.createElementNS("http://www.w3.org/2000/svg", "svg");
   inset.setAttribute("x", bounds.x);
   inset.setAttribute("y", bounds.y);
@@ -423,17 +490,12 @@ function appendInsetMap(parent, section, targetCodes, bounds) {
   inset.setAttribute("viewBox", mapBounds(section.map((item) => item.path)));
   inset.setAttribute("preserveAspectRatio", "xMidYMid meet");
 
-  section.forEach((item) => {
-    const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
-    path.setAttribute("d", item.path);
-    path.setAttribute("class", targetCodes.has(item.code) ? "map-target" : "map-area");
-    inset.appendChild(path);
-  });
+  appendMapPaths(inset, section, targetCodes, selectedCodes, options);
 
   parent.appendChild(inset);
 }
 
-function createCompositeMapSvg(sections, targetCodes, selectedPref) {
+function createCompositeMapSvg(sections, targetCodes, selectedPref, selectedCodes = new Set(), options = {}) {
   const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
   svg.setAttribute("viewBox", "0 0 820 610");
   svg.setAttribute("role", "img");
@@ -468,20 +530,20 @@ function createCompositeMapSvg(sections, targetCodes, selectedPref) {
       y: 40 + Math.floor(index / 3) * 190,
       width: 230,
       height: 170
-    });
+    }, selectedCodes, options);
   });
 
   return svg;
 }
 
-function renderMapQuestion(question) {
+function createQuestionMapSvg(question, selectedPref, selectedCodes = new Set(), options = {}) {
   const topology = getMapTopology();
   const geometries = topology?.objects?.municipalities?.geometries ?? [];
-  const selectedPref = selectedPrefectures()[0];
   const candidates = getMunicipalityCodeData().filter((item) => item.prefecture === selectedPref);
   const candidateCodes = new Set(candidates.map((item) => item.code));
   const targetCodes = new Set(question.codes);
   question.codes.forEach((code) => candidateCodes.add(code));
+  selectedCodes.forEach((code) => candidateCodes.add(code));
   const mapItems = geometries
     .filter((geometry) => candidateCodes.has(geometry.id))
     .map((geometry) => ({
@@ -490,14 +552,17 @@ function renderMapQuestion(question) {
     }))
     .filter((item) => item.path);
 
-  mapQuestionEl.innerHTML = "";
   const sections = sectionMapItems(mapItems, selectedPref);
   if (sections.length === 1) {
-    mapQuestionEl.appendChild(createMapSvg(sections[0], targetCodes, selectedPref));
-    return;
+    return createMapSvg(sections[0], targetCodes, selectedPref, options.labelSuffix ?? "", selectedCodes, options);
   }
 
-  mapQuestionEl.appendChild(createCompositeMapSvg(sections, targetCodes, selectedPref));
+  return createCompositeMapSvg(sections, targetCodes, selectedPref, selectedCodes, options);
+}
+
+function renderMapQuestion(question) {
+  mapQuestionEl.innerHTML = "";
+  mapQuestionEl.appendChild(createQuestionMapSvg(question, selectedPrefectures()[0]));
 }
 
 function formatPrefectureList(prefectureList) {
@@ -550,6 +615,96 @@ function formatRegionNameForFeedback(name) {
 
 function formatAnswerListForFeedback(answerList) {
   return answerList.map(formatRegionNameForFeedback).join("、");
+}
+
+function kanaToRoman(kana, style = "kunrei") {
+  const digraphs = {
+    "きゃ": ["kya", "kya"], "きゅ": ["kyu", "kyu"], "きょ": ["kyo", "kyo"],
+    "しゃ": ["sya", "sha"], "しゅ": ["syu", "shu"], "しょ": ["syo", "sho"],
+    "ちゃ": ["tya", "cha"], "ちゅ": ["tyu", "chu"], "ちょ": ["tyo", "cho"],
+    "にゃ": ["nya", "nya"], "にゅ": ["nyu", "nyu"], "にょ": ["nyo", "nyo"],
+    "ひゃ": ["hya", "hya"], "ひゅ": ["hyu", "hyu"], "ひょ": ["hyo", "hyo"],
+    "みゃ": ["mya", "mya"], "みゅ": ["myu", "myu"], "みょ": ["myo", "myo"],
+    "りゃ": ["rya", "rya"], "りゅ": ["ryu", "ryu"], "りょ": ["ryo", "ryo"],
+    "ぎゃ": ["gya", "gya"], "ぎゅ": ["gyu", "gyu"], "ぎょ": ["gyo", "gyo"],
+    "じゃ": ["zya", "ja"], "じゅ": ["zyu", "ju"], "じょ": ["zyo", "jo"],
+    "びゃ": ["bya", "bya"], "びゅ": ["byu", "byu"], "びょ": ["byo", "byo"],
+    "ぴゃ": ["pya", "pya"], "ぴゅ": ["pyu", "pyu"], "ぴょ": ["pyo", "pyo"]
+  };
+  const kanaMap = {
+    "あ": ["a", "a"], "い": ["i", "i"], "う": ["u", "u"], "え": ["e", "e"], "お": ["o", "o"],
+    "か": ["ka", "ka"], "き": ["ki", "ki"], "く": ["ku", "ku"], "け": ["ke", "ke"], "こ": ["ko", "ko"],
+    "さ": ["sa", "sa"], "し": ["si", "shi"], "す": ["su", "su"], "せ": ["se", "se"], "そ": ["so", "so"],
+    "た": ["ta", "ta"], "ち": ["ti", "chi"], "つ": ["tu", "tsu"], "て": ["te", "te"], "と": ["to", "to"],
+    "な": ["na", "na"], "に": ["ni", "ni"], "ぬ": ["nu", "nu"], "ね": ["ne", "ne"], "の": ["no", "no"],
+    "は": ["ha", "ha"], "ひ": ["hi", "hi"], "ふ": ["hu", "fu"], "へ": ["he", "he"], "ほ": ["ho", "ho"],
+    "ま": ["ma", "ma"], "み": ["mi", "mi"], "む": ["mu", "mu"], "め": ["me", "me"], "も": ["mo", "mo"],
+    "や": ["ya", "ya"], "ゆ": ["yu", "yu"], "よ": ["yo", "yo"],
+    "ら": ["ra", "ra"], "り": ["ri", "ri"], "る": ["ru", "ru"], "れ": ["re", "re"], "ろ": ["ro", "ro"],
+    "わ": ["wa", "wa"], "を": ["o", "o"], "ん": ["n", "n"],
+    "が": ["ga", "ga"], "ぎ": ["gi", "gi"], "ぐ": ["gu", "gu"], "げ": ["ge", "ge"], "ご": ["go", "go"],
+    "ざ": ["za", "za"], "じ": ["zi", "ji"], "ず": ["zu", "zu"], "ぜ": ["ze", "ze"], "ぞ": ["zo", "zo"],
+    "だ": ["da", "da"], "ぢ": ["di", "ji"], "づ": ["du", "zu"], "で": ["de", "de"], "ど": ["do", "do"],
+    "ば": ["ba", "ba"], "び": ["bi", "bi"], "ぶ": ["bu", "bu"], "べ": ["be", "be"], "ぼ": ["bo", "bo"],
+    "ぱ": ["pa", "pa"], "ぴ": ["pi", "pi"], "ぷ": ["pu", "pu"], "ぺ": ["pe", "pe"], "ぽ": ["po", "po"],
+    "ぁ": ["a", "a"], "ぃ": ["i", "i"], "ぅ": ["u", "u"], "ぇ": ["e", "e"], "ぉ": ["o", "o"],
+    "ゃ": ["ya", "ya"], "ゅ": ["yu", "yu"], "ょ": ["yo", "yo"], "ゎ": ["wa", "wa"]
+  };
+  const pick = (entry) => entry[style === "hepburn" ? 1 : 0];
+  let output = "";
+  let smallTsu = false;
+  for (let index = 0; index < kana.length; index += 1) {
+    const two = kana.slice(index, index + 2);
+    let roman = "";
+    if (kana[index] === "っ") {
+      smallTsu = true;
+      continue;
+    }
+    if (digraphs[two]) {
+      roman = pick(digraphs[two]);
+      index += 1;
+    } else if (kanaMap[kana[index]]) {
+      roman = pick(kanaMap[kana[index]]);
+    }
+    if (!roman) continue;
+    if (smallTsu && /^[a-z]/.test(roman)) {
+      output += roman[0];
+      smallTsu = false;
+    }
+    output += roman;
+  }
+  return output;
+}
+
+function optionReading(option) {
+  let reading = option;
+  Object.entries(prefectureReadings).forEach(([name, kana]) => {
+    reading = reading.split(name).join(kana);
+  });
+  getMunicipalityReadingEntries().forEach(([name, kana]) => {
+    reading = reading.split(name).join(kana);
+  });
+  const directReading = getMunicipalityReadings()[option] ?? getMunicipalityReadings()[normalizedMunicipalityName(option)];
+  return (directReading ?? reading).replace(/[^ぁ-ん]/g, "");
+}
+
+function optionFilterKeys(option) {
+  if (/^\d/.test(option)) {
+    return [option.replace(/^0+/, "") || "0"];
+  }
+  const reading = optionReading(option);
+  const keys = [
+    option.toLowerCase(),
+    kanaToRoman(reading, "kunrei"),
+    kanaToRoman(reading, "hepburn")
+  ].filter(Boolean);
+  return [...new Set(keys)];
+}
+
+function optionMatchesFilter(option, filterText) {
+  const query = filterText.trim().toLowerCase();
+  if (!query) return true;
+  return optionFilterKeys(option).some((key) => key.startsWith(query));
 }
 
 function buildQuestions(items) {
@@ -699,11 +854,20 @@ function updateScoreboard() {
 
 function renderOptions() {
   optionsEl.innerHTML = "";
-  optionPrefectures.forEach((prefecture) => {
+  const filterText = answerFilterEl.value;
+  optionPrefectures
+    .filter((prefecture) => optionMatchesFilter(prefecture, filterText))
+    .forEach((prefecture) => {
     const button = document.createElement("button");
     button.type = "button";
     button.className = "pref-button";
     button.textContent = prefecture;
+    if (selectedCorrectPrefectures.includes(prefecture)) {
+      button.classList.add("correct");
+      button.disabled = true;
+    } else if (locked) {
+      button.disabled = true;
+    }
     button.addEventListener("click", () => answer(prefecture, button));
     optionsEl.appendChild(button);
   });
@@ -742,6 +906,26 @@ function setOptionsDisabled(disabled) {
   });
 }
 
+function selectedMapCodesForAnswer(selectedAnswer, quizMode) {
+  if (quizMode !== "map" && quizMode !== "mapAreaCode") return [];
+  if (quizMode === "map") {
+    const item = matchingMapMunicipalities().find((municipality) => municipality.name === selectedAnswer);
+    return item ? [item.code] : [];
+  }
+  return matchingMapAreaCodes().find((question) => question.name === selectedAnswer)?.codes ?? [];
+}
+
+function recordMapAnswerResult(quizMode, selectedPrefectureName, correctCodes, isCorrect) {
+  if (quizMode !== "map" && quizMode !== "mapAreaCode") return;
+  if (!Array.isArray(correctCodes) || correctCodes.length === 0) return;
+  mapAnswerResults.push({
+    quizMode,
+    selectedPrefectureName,
+    correctCodes: [...correctCodes],
+    isCorrect
+  });
+}
+
 function nextQuestion(options = {}) {
   const { keepFeedback = false } = options;
   currentQuestion = questionPool[answered] ?? null;
@@ -756,6 +940,9 @@ function nextQuestion(options = {}) {
     showResult();
     return;
   }
+
+  answerFilterEl.value = "";
+  renderOptions();
 
   const quizMode = currentQuizMode();
   municipalityEl.classList.toggle("hidden", quizMode === "diamond" || quizMode === "map" || quizMode === "mapAreaCode");
@@ -821,6 +1008,7 @@ function answer(selectedPrefecture, selectedButton) {
 
     locked = true;
     score += 1;
+    recordMapAnswerResult(quizMode, selectedPrefectures()[0], currentQuestion.codes, true);
     feedbackEl.textContent = quizMode === "diamond"
       ? `正解です。このダイヤは${correctText}です。`
       : quizMode === "map"
@@ -834,6 +1022,8 @@ function answer(selectedPrefecture, selectedButton) {
   } else {
     locked = true;
     selectedButton.classList.add("wrong");
+    const wrongSelectedCodes = selectedMapCodesForAnswer(selectedPrefecture, quizMode);
+    recordMapAnswerResult(quizMode, selectedPrefectures()[0], currentQuestion.codes, false);
     feedbackEl.textContent = quizMode === "diamond"
       ? `残念！このダイヤは${correctText}でした。`
       : quizMode === "map"
@@ -848,6 +1038,9 @@ function answer(selectedPrefecture, selectedButton) {
       name: currentQuestion.name,
       selected: selectedPrefecture,
       correct: correctText,
+      quizMode,
+      selectedPrefectureName: selectedPrefectures()[0],
+      selectedCodes: wrongSelectedCodes,
       question: {
         name: currentQuestion.name,
         prefectures: [...currentQuestion.prefectures],
@@ -874,6 +1067,7 @@ function startQuestionSet(questions, options = {}) {
   score = 0;
   answered = 0;
   wrongAnswers = [];
+  mapAnswerResults = [];
   selectedCorrectPrefectures = [];
   reviewMode = isReview;
   resultReviewQuestions = [];
@@ -893,6 +1087,97 @@ function startQuiz() {
 function startReview() {
   if (resultReviewQuestions.length === 0) return;
   startQuestionSet(shuffle(resultReviewQuestions), { isReview: true });
+}
+
+function appendWrongDetail(item, wrong) {
+  const detail = document.createElement("div");
+  detail.className = "wrong-detail";
+
+  const name = document.createElement("span");
+  name.className = "wrong-name";
+  name.textContent = wrong.name;
+
+  const selected = document.createElement("span");
+  selected.textContent = `選択: ${wrong.selected}`;
+
+  const correct = document.createElement("span");
+  correct.textContent = `正解: ${wrong.correct}`;
+
+  detail.append(name, selected, correct);
+  item.appendChild(detail);
+}
+
+function appendWrongMapResult(item, wrong) {
+  const mapWrap = document.createElement("div");
+  mapWrap.className = "wrong-map";
+  const selectedCodes = new Set(wrong.selectedCodes ?? []);
+  mapWrap.appendChild(createQuestionMapSvg(
+    wrong.question,
+    wrong.selectedPrefectureName,
+    selectedCodes,
+    {
+      resultMode: true,
+      labelSuffix: "の不正解"
+    }
+  ));
+
+  const legend = document.createElement("div");
+  legend.className = "wrong-map-legend";
+  legend.innerHTML = `
+    <span><b class="legend-correct"></b>正解</span>
+    <span><b class="legend-wrong"></b>選択</span>
+  `;
+  mapWrap.appendChild(legend);
+  item.appendChild(mapWrap);
+}
+
+function mapResultAnswers() {
+  return mapAnswerResults.filter((answer) => (
+    (answer.quizMode === "map" || answer.quizMode === "mapAreaCode") &&
+    Array.isArray(answer.correctCodes) &&
+    answer.correctCodes.length > 0
+  ));
+}
+
+function renderResultMapSummary(mapAnswers) {
+  resultMapSummaryEl.innerHTML = "";
+  resultMapSummaryEl.classList.add("hidden");
+  if (mapAnswers.length === 0) return;
+
+  const selectedPref = mapAnswers[0].selectedPrefectureName;
+  const correctCodes = new Set();
+  const wrongCodes = new Set();
+  mapAnswers.forEach((answer) => {
+    const target = answer.isCorrect ? correctCodes : wrongCodes;
+    answer.correctCodes.forEach((code) => target.add(code));
+  });
+
+  if (correctCodes.size === 0 && wrongCodes.size === 0) return;
+
+  const mapQuestion = {
+    name: "不正解の位置",
+    prefectures: [],
+    codes: [...correctCodes]
+  };
+
+  resultMapSummaryEl.appendChild(createQuestionMapSvg(
+    mapQuestion,
+    selectedPref,
+    wrongCodes,
+    {
+      resultMode: true,
+      labelSuffix: "の不正解一覧"
+    }
+  ));
+
+  const legend = document.createElement("div");
+  legend.className = "wrong-map-legend";
+  legend.innerHTML = `
+    <span><b class="legend-correct"></b>正解した地域</span>
+    <span><b class="legend-wrong"></b>不正解の地域</span>
+  `;
+  resultMapSummaryEl.appendChild(legend);
+  resultMapSummaryEl.classList.remove("hidden");
 }
 
 function showResult() {
@@ -918,6 +1203,7 @@ function showResult() {
   resultScoreEl.textContent = `${total}問中${score}問正解`;
   reviewButton.disabled = resultReviewQuestions.length === 0;
   wrongListEl.innerHTML = "";
+  renderResultMapSummary(mapResultAnswers());
 
   if (wrongAnswers.length === 0) {
     const item = document.createElement("li");
@@ -927,14 +1213,16 @@ function showResult() {
   } else {
     wrongAnswers.forEach((wrong) => {
       const item = document.createElement("li");
-      const questionLabel = wrong.question.image
-        ? `<img class="wrong-question-image" src="${wrong.question.image}" alt="不正解だった横断歩道ダイヤ">`
-        : `<span class="wrong-name">${wrong.name}</span>`;
-      item.innerHTML = `
-        ${questionLabel}
-        <span>選択: ${wrong.selected}</span>
-        <span>正解: ${wrong.correct}</span>
-      `;
+      if (wrong.question.image) {
+        const image = document.createElement("img");
+        image.className = "wrong-question-image";
+        image.src = wrong.question.image;
+        image.alt = "不正解だった横断歩道ダイヤ";
+        item.appendChild(image);
+        appendWrongDetail(item, wrong);
+      } else {
+        appendWrongDetail(item, wrong);
+      }
       wrongListEl.appendChild(item);
     });
   }
@@ -951,6 +1239,7 @@ function backToSetup() {
   score = 0;
   answered = 0;
   wrongAnswers = [];
+  mapAnswerResults = [];
   selectedCorrectPrefectures = [];
   reviewMode = false;
   resultReviewQuestions = [];
@@ -960,6 +1249,17 @@ function backToSetup() {
 
 typeCheckboxes.forEach((checkbox) => {
   checkbox.addEventListener("change", updateQuestionCountOptions);
+});
+
+answerFilterEl.addEventListener("input", () => {
+  answerFilterEl.value = answerFilterEl.value.replace(/\r?\n/g, "");
+  renderOptions();
+});
+
+answerFilterEl.addEventListener("keydown", (event) => {
+  if (event.key === "Enter") {
+    event.preventDefault();
+  }
 });
 
 quizModeRadios.forEach((radio) => {

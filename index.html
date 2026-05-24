@@ -92,6 +92,7 @@
           </section>
 
           <section class="options-wrap" aria-label="都道府県の選択肢">
+            <textarea id="answerFilter" class="answer-filter" rows="1" aria-label="選択肢を絞り込む" placeholder="romaji / number"></textarea>
             <div id="options" class="options-grid"></div>
           </section>
         </section>
@@ -104,6 +105,7 @@
           </div>
 
           <section class="wrong-section" aria-labelledby="wrongTitle">
+            <div id="resultMapSummary" class="result-map-summary hidden" aria-label="不正解位置の地図"></div>
             <h2 id="wrongTitle">不正解の問題</h2>
             <ul id="wrongList" class="wrong-list"></ul>
           </section>
