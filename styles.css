@@ -272,35 +272,35 @@ select {
 .map-divider {
   fill: none;
   stroke: #343a37;
-  stroke-width: 1.0;
+  stroke-width: 0.7;
   vector-effect: non-scaling-stroke;
 }
 
 .map-area {
   fill: #fff982;
   stroke: #17211e;
-  stroke-width: 1.0;
+  stroke-width: 0.7;
   vector-effect: non-scaling-stroke;
 }
 
 .map-target {
   fill: #1c36f2;
   stroke: #17211e;
-  stroke-width: 1.0;
+  stroke-width: 0.7;
   vector-effect: non-scaling-stroke;
 }
 
 .map-result-correct {
   fill: #a7e957;
   stroke: #123a1c;
-  stroke-width: 1.0;
+  stroke-width: 0.7;
   vector-effect: non-scaling-stroke;
 }
 
 .map-result-wrong {
   fill: #f05252;
   stroke: #6f1414;
-  stroke-width: 1.0;
+  stroke-width: 0.7;
   vector-effect: non-scaling-stroke;
 }
 
