@@ -174,6 +174,66 @@ input[type="radio"] {
   background: #fff4f2;
 }
 
+.local-place-region {
+  display: grid;
+  gap: 12px;
+}
+
+.local-place-prefectures {
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+}
+
+.local-place-drilldown {
+  grid-template-columns: 1fr;
+}
+
+.setting-choice-button {
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #f9fbfa;
+  color: var(--ink);
+  cursor: pointer;
+  font: inherit;
+  font-weight: 800;
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+
+.setting-choice-button.selected {
+  border-color: rgba(201, 65, 50, 0.62);
+  background: #fff4f2;
+}
+
+.setting-choice-button:disabled {
+  cursor: default;
+  opacity: 0.42;
+}
+
+.drilldown-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.compact-button {
+  min-height: 36px;
+  padding: 0 12px;
+}
+
+.municipality-search {
+  margin: 0;
+}
+
+.municipality-drilldown-grid {
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+}
+
 .question-count-row {
   display: flex;
   flex-wrap: wrap;
@@ -620,6 +680,10 @@ select {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
+  .municipality-drilldown-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
   .pref-button {
     min-height: 42px;
     padding: 7px 4px;
@@ -637,6 +701,10 @@ select {
 
 @media (max-width: 390px) {
   .options-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .municipality-drilldown-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }

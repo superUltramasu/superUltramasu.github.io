@@ -34,3 +34,7 @@
 ## 地図データについて
 
 地図クイズでは、`map-quiz-data.js` 内で jpn-atlas の日本市区町村境界 TopoJSON と、ウェザーニューズの市区町村コード一覧を使用しています。
+
+町丁目地図クイズでは、`local-place-map-data.js` 内で CODH 作成の「国勢調査町丁・字等別境界データセット」を使用しています。このデータは「令和2年国勢調査町丁・字等別境界データ」（e-Stat）を加工したものです。
+
+参照元: https://geoshape.ex.nii.ac.jp/ka/resource/13112.html
