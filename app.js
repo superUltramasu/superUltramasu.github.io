@@ -105,6 +105,7 @@ const quizPromptEl = document.querySelector("#quizPrompt");
 const questionImageEl = document.querySelector("#questionImage");
 const mapQuestionEl = document.querySelector("#mapQuestion");
 const answerFilterEl = document.querySelector("#answerFilter");
+const optionsWrapEl = document.querySelector(".options-wrap");
 const optionsEl = document.querySelector("#options");
 const feedbackEl = document.querySelector("#feedback");
 const scoreEl = document.querySelector("#score");
@@ -129,6 +130,7 @@ let resultReviewQuestions = [];
 let localPlaceSettingsPrefecture = null;
 let localPlaceSettingsMunicipality = null;
 let localPlaceMunicipalityFilter = "";
+let localPlaceLoadingPromise = null;
 
 function currentQuizMode() {
   return document.querySelector('input[name="quizMode"]:checked')?.value ?? "municipality";
@@ -158,16 +160,179 @@ function getLocalPlaceMapData() {
   return window.localPlaceMapData ?? { municipalities: [] };
 }
 
+function getLocalPlaceDataFiles() {
+  window.localPlaceDataFiles = window.localPlaceDataFiles || {};
+  return window.localPlaceDataFiles;
+}
+
 function getLocalPlaceMunicipalities() {
   return Array.isArray(getLocalPlaceMapData().municipalities) ? getLocalPlaceMapData().municipalities : [];
 }
 
+function getLocalPlaceCandidateMunicipalities(prefecture = null) {
+  const manifestItems = getLocalPlaceMunicipalities();
+  const byKey = new Map(manifestItems.map((item) => [`${item.prefecture}\t${item.name}`, item]));
+  getAugmentedMunicipalityCodeData().forEach((item) => {
+    const key = `${item.prefecture}\t${item.name}`;
+    if (byKey.has(key)) return;
+    byKey.set(key, {
+      prefecture: item.prefecture,
+      code: item.code,
+      name: item.name,
+      available: true,
+      remoteTopojsonPath: localPlaceRemoteTopojsonPath(item.code)
+    });
+  });
+  const items = [...byKey.values()];
+  return prefecture ? items.filter((item) => item.prefecture === prefecture) : items;
+}
+
+function localPlaceDataForCode(code) {
+  return getLocalPlaceDataFiles()[code] ?? null;
+}
+
+function selectedLocalPlaceMunicipalityMetadata() {
+  return getLocalPlaceCandidateMunicipalities().find((item) => (
+    item.prefecture === localPlaceSettingsPrefecture &&
+    item.name === localPlaceSettingsMunicipality
+  )) ?? null;
+}
+
+function selectedLocalPlaceQuestionCount() {
+  const municipality = selectedLocalPlaceMunicipality();
+  return municipality?.places?.length ?? municipality?.placeCount ?? null;
+}
+
+function localPlaceRemoteTopojsonPath(code) {
+  return `https://geoshape.ex.nii.ac.jp/ka/topojson/2020/${code.slice(0, 2)}/r2ka${code}.topojson`;
+}
+
+function localPlaceGeometryCode(geometry) {
+  return String(geometry?.properties?.KEY_CODE ?? geometry?.properties?.code ?? geometry?.id ?? "");
+}
+
+function localPlaceGeometryName(geometry) {
+  return String(geometry?.properties?.S_NAME ?? geometry?.properties?.name ?? geometry?.properties?.MOJI ?? "");
+}
+
+function normalizeLocalPlaceTopology(rawTopology) {
+  const objects = rawTopology?.objects ?? {};
+  const sourceObject = objects.town ?? objects.places ?? Object.values(objects)[0];
+  const geometries = sourceObject?.geometries ?? [];
+  const places = [];
+  const normalizedGeometries = [];
+
+  geometries.forEach((geometry) => {
+    const code = localPlaceGeometryCode(geometry);
+    const name = localPlaceGeometryName(geometry);
+    if (!code || !name) return;
+    const normalizedGeometry = {
+      ...geometry,
+      id: code,
+      properties: {
+        ...(geometry.properties ?? {}),
+        code,
+        name
+      }
+    };
+    normalizedGeometries.push(normalizedGeometry);
+    places.push({ code, name, reading: "" });
+  });
+
+  return {
+    places,
+    topology: {
+      type: rawTopology?.type ?? "Topology",
+      transform: rawTopology?.transform,
+      arcs: rawTopology?.arcs ?? [],
+      objects: {
+        places: {
+          type: sourceObject?.type ?? "GeometryCollection",
+          geometries: normalizedGeometries
+        }
+      }
+    }
+  };
+}
+
+function loadScriptOnce(src) {
+  const existing = document.querySelector(`script[data-dynamic-src="${src}"]`);
+  if (existing?.dataset.loaded === "true") return Promise.resolve();
+  if (existing?.dataset.loading === "true") {
+    return new Promise((resolve, reject) => {
+      existing.addEventListener("load", resolve, { once: true });
+      existing.addEventListener("error", reject, { once: true });
+    });
+  }
+
+  return new Promise((resolve, reject) => {
+    const script = document.createElement("script");
+    script.src = src;
+    script.dataset.dynamicSrc = src;
+    script.dataset.loading = "true";
+    script.addEventListener("load", () => {
+      script.dataset.loaded = "true";
+      script.dataset.loading = "false";
+      resolve();
+    }, { once: true });
+    script.addEventListener("error", reject, { once: true });
+    document.body.appendChild(script);
+  });
+}
+
+async function ensureSelectedLocalPlaceDataLoaded() {
+  const municipality = selectedLocalPlaceMunicipalityMetadata();
+  if (!municipality) return null;
+  const loaded = localPlaceDataForCode(municipality.code);
+  if (loaded?.places?.length) return loaded;
+
+  if (municipality.dataPath) {
+    localPlaceLoadingPromise = loadScriptOnce(municipality.dataPath).then(() => {
+      const loadedAfterScript = localPlaceDataForCode(municipality.code);
+      if (!loadedAfterScript?.places?.length) {
+        throw new Error(`${municipality.name}の町丁目データを読み込めませんでした。`);
+      }
+      return loadedAfterScript;
+    });
+    return localPlaceLoadingPromise;
+  }
+
+  localPlaceLoadingPromise = fetch(municipality.remoteTopojsonPath ?? localPlaceRemoteTopojsonPath(municipality.code))
+    .then((response) => {
+      if (!response.ok) {
+        throw new Error(`${municipality.name}の町丁目データを取得できませんでした。`);
+      }
+      return response.json();
+    })
+    .then((rawTopology) => {
+      const { places, topology } = normalizeLocalPlaceTopology(rawTopology);
+      if (places.length === 0) {
+        throw new Error(`${municipality.name}の町丁目データが空でした。`);
+      }
+      const payload = {
+        prefecture: municipality.prefecture,
+        code: municipality.code,
+        name: municipality.name,
+        places,
+        topology
+      };
+      getLocalPlaceDataFiles()[municipality.code] = payload;
+      municipality.placeCount = places.length;
+      return payload;
+    });
+  return localPlaceLoadingPromise;
+}
+
 function isPrefectureMapMode(quizMode = currentQuizMode()) {
-  return quizMode === "map" || quizMode === "mapAreaCode";
+  return quizMode === "map" || quizMode === "municipalityMap" || quizMode === "mapAreaCode";
 }
 
 function isLocalPlaceMapMode(quizMode = currentQuizMode()) {
   return quizMode === "localPlaceMap";
+}
+
+function isMapClickMode(quizMode = currentQuizMode()) {
+  return quizMode === "municipalityMap";
 }
 
 function normalizedMapMunicipalityName(name) {
@@ -291,7 +456,7 @@ function renderRegionOptions() {
 }
 
 function localPlaceMunicipalitiesByPrefecture(prefecture) {
-  return getLocalPlaceMunicipalities().filter((item) => item.prefecture === prefecture);
+  return getLocalPlaceCandidateMunicipalities(prefecture);
 }
 
 function localPlaceMunicipalityCandidateNames(prefecture) {
@@ -303,17 +468,15 @@ function localPlaceMunicipalityCandidateNames(prefecture) {
 }
 
 function selectedLocalPlaceMunicipality() {
-  return getLocalPlaceMunicipalities().find((item) => (
-    item.prefecture === localPlaceSettingsPrefecture &&
-    item.name === localPlaceSettingsMunicipality
-  )) ?? null;
+  const metadata = selectedLocalPlaceMunicipalityMetadata();
+  return metadata ? (localPlaceDataForCode(metadata.code) ?? metadata) : null;
 }
 
 function renderPrefectureButtonsForLocalPlace() {
   regionLegendEl.textContent = "県";
   regionOptionsEl.classList.add("local-place-prefectures");
   regionOptionsEl.classList.remove("local-place-drilldown");
-  const availablePrefs = new Set(getLocalPlaceMunicipalities().map((item) => item.prefecture));
+  const availablePrefs = new Set(getLocalPlaceCandidateMunicipalities().map((item) => item.prefecture));
 
   prefectures.forEach((prefecture) => {
     const button = document.createElement("button");
@@ -379,7 +542,11 @@ function renderMunicipalityButtonsForLocalPlace() {
 
 function renderLocalPlaceMunicipalityGrid(grid) {
   grid.innerHTML = "";
-  const availableNames = new Set(localPlaceMunicipalitiesByPrefecture(localPlaceSettingsPrefecture).map((item) => item.name));
+  const availableNames = new Set(
+    localPlaceMunicipalitiesByPrefecture(localPlaceSettingsPrefecture)
+      .filter((item) => item.available !== false && (item.dataPath || item.remoteTopojsonPath))
+      .map((item) => item.name)
+  );
   localPlaceMunicipalityCandidateNames(localPlaceSettingsPrefecture)
     .filter((name) => optionMatchesFilter(name, localPlaceMunicipalityFilter))
     .forEach((name) => {
@@ -534,7 +701,8 @@ function matchingMapAreaCodes() {
 }
 
 function matchingLocalPlaces() {
-  const municipality = selectedLocalPlaceMunicipality();
+  const metadata = selectedLocalPlaceMunicipalityMetadata();
+  const municipality = metadata ? localPlaceDataForCode(metadata.code) : selectedLocalPlaceMunicipality();
   return municipality?.places ?? [];
 }
 
@@ -668,9 +836,13 @@ function sectionMapItems(mapItems, selectedPref) {
     });
 }
 
-function mapPathClass(code, targetCodes, selectedCodes, resultMode) {
+function mapPathClass(code, targetCodes, selectedCodes, resultMode, options = {}) {
+  if (options.clickable) {
+    if (selectedCodes.has(code)) return "map-click-selected";
+    return "map-area map-clickable";
+  }
   if (!resultMode) {
-    return targetCodes.has(code) ? "map-target" : "map-area";
+    return targetCodes.has(code) && !options.hideTarget ? "map-target" : "map-area";
   }
   if (selectedCodes.has(code)) return "map-result-wrong";
   if (targetCodes.has(code)) return "map-result-correct";
@@ -682,7 +854,22 @@ function appendMapPaths(parent, mapItems, targetCodes, selectedCodes, options = 
   mapItems.forEach((item) => {
     const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
     path.setAttribute("d", item.path);
-    path.setAttribute("class", mapPathClass(item.code, targetCodes, selectedCodes, resultMode));
+    path.setAttribute("class", mapPathClass(item.code, targetCodes, selectedCodes, resultMode, options));
+    path.dataset.code = item.code;
+    if (item.name) {
+      path.dataset.name = item.name;
+    }
+    if (options.clickable && typeof options.onMapAnswer === "function") {
+      path.setAttribute("tabindex", "0");
+      path.setAttribute("role", "button");
+      path.setAttribute("aria-label", item.name ?? item.code);
+      path.addEventListener("click", () => options.onMapAnswer(item.code, item.name, path));
+      path.addEventListener("keydown", (event) => {
+        if (event.key !== "Enter" && event.key !== " ") return;
+        event.preventDefault();
+        options.onMapAnswer(item.code, item.name, path);
+      });
+    }
     parent.appendChild(path);
   });
 }
@@ -790,6 +977,7 @@ function createQuestionMapSvg(question, selectedPref, selectedCodes = new Set(),
   const geometries = topology?.objects?.municipalities?.geometries ?? [];
   const candidates = getAugmentedMunicipalityCodeData().filter((item) => item.prefecture === selectedPref);
   const candidateCodes = new Set(candidates.map((item) => item.code));
+  const candidateByCode = new Map(candidates.map((item) => [item.code, item]));
   const targetCodes = new Set(question.codes);
   question.codes.forEach((code) => candidateCodes.add(code));
   selectedCodes.forEach((code) => candidateCodes.add(code));
@@ -797,6 +985,7 @@ function createQuestionMapSvg(question, selectedPref, selectedCodes = new Set(),
     .filter((geometry) => candidateCodes.has(geometry.id))
     .map((geometry) => ({
       code: geometry.id,
+      name: candidateByCode.get(geometry.id)?.name,
       path: geometryPath(topology, geometry)
     }))
     .filter((item) => item.path);
@@ -810,7 +999,7 @@ function createQuestionMapSvg(question, selectedPref, selectedCodes = new Set(),
 }
 
 function createLocalPlaceMapSvg(question, selectedCodes = new Set(), options = {}) {
-  const municipality = getLocalPlaceMunicipalities().find((item) => item.code === question.localPlaceMunicipalityCode)
+  const municipality = localPlaceDataForCode(question.localPlaceMunicipalityCode)
     ?? selectedLocalPlaceMunicipality();
   const topology = municipality?.topology;
   const geometries = topology?.objects?.places?.geometries ?? [];
@@ -838,7 +1027,18 @@ function renderMapQuestion(question) {
     mapQuestionEl.appendChild(createLocalPlaceMapSvg(question));
     return;
   }
-  mapQuestionEl.appendChild(createQuestionMapSvg(question, selectedPrefectures()[0]));
+  mapQuestionEl.appendChild(createQuestionMapSvg(
+    question,
+    selectedPrefectures()[0],
+    new Set(),
+    isMapClickMode()
+      ? {
+        hideTarget: true,
+        clickable: true,
+        onMapAnswer: answerMapClick
+      }
+      : {}
+  ));
 }
 
 function formatPrefectureList(prefectureList) {
@@ -953,7 +1153,8 @@ function kanaToRoman(kana, style = "kunrei") {
 }
 
 function optionReading(option) {
-  const localPlace = getLocalPlaceMunicipalities()
+  const loadedLocalPlaceMunicipalities = Object.values(getLocalPlaceDataFiles());
+  const localPlace = loadedLocalPlaceMunicipalities
     .flatMap((municipality) => municipality.places ?? [])
     .find((place) => place.name === option);
   if (localPlace?.reading) return localPlace.reading.replace(/[^ぁ-ん]/g, "");
@@ -1030,6 +1231,14 @@ function availableQuestions() {
     }));
   }
 
+  if (currentQuizMode() === "municipalityMap") {
+    return matchingMapMunicipalities().map((item) => ({
+      name: item.name,
+      prefectures: [item.name],
+      codes: [item.code]
+    }));
+  }
+
   if (currentQuizMode() === "mapAreaCode") {
     return matchingMapAreaCodes();
   }
@@ -1069,28 +1278,30 @@ function updateQuestionCountOptions() {
   const typeCount = selectedTypes().length;
   const quizMode = currentQuizMode();
   const areaCodeMode = quizMode === "areaCode";
-  const municipalityMode = quizMode === "municipality" || quizMode === "map" || quizMode === "mapAreaCode";
+  const municipalityMode = quizMode === "municipality" || quizMode === "map" || quizMode === "municipalityMap" || quizMode === "mapAreaCode";
   const localPlaceMode = isLocalPlaceMapMode(quizMode);
   const universityMode = isUniversityMode(quizMode);
   const universityLabel = universityCategoryLabel(quizMode);
-  const count = availableQuestions().length;
+  const rawCount = localPlaceMode ? selectedLocalPlaceQuestionCount() : availableQuestions().length;
+  const provisionalLocalPlaceCount = localPlaceMode && rawCount == null && selectedLocalPlaceMunicipalityMetadata();
+  const count = provisionalLocalPlaceCount ? 100 : rawCount;
   const choices = questionCountChoices(count);
   questionCountEl.innerHTML = "";
 
   choices.forEach((choice) => {
     const option = document.createElement("option");
     option.value = String(choice);
-    option.textContent = choice === count ? `${choice}問（全問）` : `${choice}問`;
+    option.textContent = choice === count && !provisionalLocalPlaceCount ? `${choice}問（全問）` : `${choice}問`;
     questionCountEl.appendChild(option);
   });
 
   if (choices.includes(previousValue)) {
     questionCountEl.value = String(previousValue);
   } else if (count > 0) {
-    questionCountEl.value = String(count);
+    questionCountEl.value = provisionalLocalPlaceCount ? "5" : String(count);
   }
 
-  availableCountEl.textContent = `出題可能: ${count}問`;
+  availableCountEl.textContent = provisionalLocalPlaceCount ? "出題可能: 読み込み後に確定" : `出題可能: ${count}問`;
   municipalityTypeGroupEl.classList.toggle("hidden", !municipalityMode);
   const canStart = regionCount > 0 && (!municipalityMode || typeCount > 0) && count > 0;
   startButton.disabled = !canStart;
@@ -1105,7 +1316,9 @@ function updateQuestionCountOptions() {
   } else if (municipalityMode && typeCount === 0) {
     setupMessageEl.textContent = "市区町村を1つ以上選んでください。";
   } else if (count === 0) {
-    setupMessageEl.textContent = universityMode
+    setupMessageEl.textContent = localPlaceMode
+      ? "選択した市区町村の町丁目データがありません。別の市区町村を選んでください。"
+      : universityMode
       ? `選択条件に合う${universityLabel}がありません。条件を変更してください。`
       : "選択条件に合う自治体がありません。条件を変更してください。";
   } else {
@@ -1115,6 +1328,8 @@ function updateQuestionCountOptions() {
         ? "横断歩道ダイヤクイズの条件を選んで開始してください。"
         : quizMode === "map"
           ? "地図クイズの条件を選んで開始してください。"
+        : quizMode === "municipalityMap"
+          ? "市区町村名から地図上の位置を当てるクイズの条件を選んで開始してください。"
         : quizMode === "mapAreaCode"
           ? "地図市外局番クイズの条件を選んで開始してください。"
         : localPlaceMode
@@ -1185,6 +1400,10 @@ function answerCandidatesForCurrentMode() {
     return matchingMapMunicipalities().map((item) => item.name);
   }
 
+  if (isMapClickMode()) {
+    return [];
+  }
+
   if (currentQuizMode() === "mapAreaCode") {
     return matchingMapAreaCodes().map((item) => item.name);
   }
@@ -1207,10 +1426,13 @@ function setOptionsDisabled(disabled) {
 }
 
 function selectedMapCodesForAnswer(selectedAnswer, quizMode) {
-  if (quizMode !== "map" && quizMode !== "mapAreaCode" && !isLocalPlaceMapMode(quizMode)) return [];
+  if (quizMode !== "map" && quizMode !== "municipalityMap" && quizMode !== "mapAreaCode" && !isLocalPlaceMapMode(quizMode)) return [];
   if (quizMode === "map") {
     const item = matchingMapMunicipalities().find((municipality) => municipality.name === selectedAnswer);
     return item ? [item.code] : [];
+  }
+  if (quizMode === "municipalityMap") {
+    return [selectedAnswer].filter(Boolean);
   }
   if (isLocalPlaceMapMode(quizMode)) {
     const item = matchingLocalPlaces().find((place) => place.name === selectedAnswer);
@@ -1219,8 +1441,12 @@ function selectedMapCodesForAnswer(selectedAnswer, quizMode) {
   return matchingMapAreaCodes().find((question) => question.name === selectedAnswer)?.codes ?? [];
 }
 
+function mapMunicipalityNameByCode(code) {
+  return matchingMapMunicipalities().find((municipality) => municipality.code === code)?.name ?? code;
+}
+
 function recordMapAnswerResult(quizMode, selectedPrefectureName, correctCodes, isCorrect) {
-  if (quizMode !== "map" && quizMode !== "mapAreaCode" && !isLocalPlaceMapMode(quizMode)) return;
+  if (quizMode !== "map" && quizMode !== "municipalityMap" && quizMode !== "mapAreaCode" && !isLocalPlaceMapMode(quizMode)) return;
   if (!Array.isArray(correctCodes) || correctCodes.length === 0) return;
   mapAnswerResults.push({
     quizMode,
@@ -1229,6 +1455,46 @@ function recordMapAnswerResult(quizMode, selectedPrefectureName, correctCodes, i
     isCorrect,
     localPlaceMunicipalityCode: currentQuestion?.localPlaceMunicipalityCode
   });
+}
+
+function answerMapClick(selectedCode, selectedName, selectedPath) {
+  if (locked || !currentQuestion || !isMapClickMode()) return;
+
+  const quizMode = currentQuizMode();
+  const correct = currentQuestion.codes.includes(selectedCode);
+  const questionNameText = formatRegionNameForFeedback(currentQuestion.name);
+  const selectedText = selectedName ?? mapMunicipalityNameByCode(selectedCode);
+
+  locked = true;
+  selectedPath.classList.add(correct ? "map-click-correct" : "map-click-wrong");
+  recordMapAnswerResult(quizMode, selectedPrefectures()[0], currentQuestion.codes, correct);
+
+  if (correct) {
+    score += 1;
+    feedbackEl.textContent = `正解です。${questionNameText}はここです。`;
+    feedbackEl.className = "feedback correct";
+  } else {
+    feedbackEl.textContent = `残念！${questionNameText}はここでした。`;
+    feedbackEl.className = "feedback wrong";
+    wrongAnswers.push({
+      name: currentQuestion.name,
+      selected: selectedText,
+      correct: questionNameText,
+      quizMode,
+      selectedPrefectureName: selectedPrefectures()[0],
+      selectedCodes: [selectedCode],
+      question: {
+        name: currentQuestion.name,
+        prefectures: [...currentQuestion.prefectures],
+        image: currentQuestion.image,
+        codes: currentQuestion.codes
+      }
+    });
+  }
+
+  answered += 1;
+  updateScoreboard();
+  nextQuestion({ keepFeedback: true });
 }
 
 function nextQuestion(options = {}) {
@@ -1250,17 +1516,18 @@ function nextQuestion(options = {}) {
   renderOptions();
 
   const quizMode = currentQuizMode();
-  const mapQuestionMode = quizMode === "map" || quizMode === "mapAreaCode" || isLocalPlaceMapMode(quizMode);
-  municipalityEl.classList.toggle("hidden", quizMode === "diamond" || mapQuestionMode);
+  const mapQuestionMode = quizMode === "map" || quizMode === "municipalityMap" || quizMode === "mapAreaCode" || isLocalPlaceMapMode(quizMode);
+  municipalityEl.classList.toggle("hidden", quizMode === "diamond" || (mapQuestionMode && !isMapClickMode(quizMode)));
   questionImageEl.classList.toggle("hidden", quizMode !== "diamond");
   mapQuestionEl.classList.toggle("hidden", !mapQuestionMode);
+  optionsWrapEl.classList.toggle("hidden", isMapClickMode(quizMode));
   if (quizMode === "diamond") {
     municipalityEl.textContent = "";
     questionImageEl.src = currentQuestion.image;
     questionImageEl.alt = "横断歩道ダイヤ";
     mapQuestionEl.innerHTML = "";
   } else if (mapQuestionMode) {
-    municipalityEl.textContent = "";
+    municipalityEl.textContent = isMapClickMode(quizMode) ? currentQuestion.name : "";
     questionImageEl.removeAttribute("src");
     questionImageEl.alt = "";
     renderMapQuestion(currentQuestion);
@@ -1277,6 +1544,8 @@ function nextQuestion(options = {}) {
       ? "この横断歩道ダイヤが存在する都道府県は？"
       : quizMode === "map"
         ? "赤色で示された市区町村は？"
+      : quizMode === "municipalityMap"
+        ? "この市区町村は地図上のどこ？"
       : quizMode === "mapAreaCode"
         ? "青色で示された地域の市外局番は？"
       : isLocalPlaceMapMode(quizMode)
@@ -1390,11 +1659,35 @@ function startQuestionSet(questions, options = {}) {
   nextQuestion();
 }
 
-function startQuiz() {
-  const candidates = shuffle(availableQuestions());
-  const count = Number(questionCountEl.value);
-  optionPrefectures = [...new Set(answerCandidatesForCurrentMode())];
-  startQuestionSet(candidates.slice(0, count));
+async function startQuiz() {
+  startButton.disabled = true;
+  retryButton.disabled = true;
+  let started = false;
+  setupMessageEl.textContent = isLocalPlaceMapMode()
+    ? "町丁目データを読み込んでいます。"
+    : setupMessageEl.textContent;
+
+  try {
+    if (isLocalPlaceMapMode()) {
+      await ensureSelectedLocalPlaceDataLoaded();
+    }
+    const candidates = shuffle(availableQuestions());
+    const count = Number(questionCountEl.value);
+    optionPrefectures = [...new Set(answerCandidatesForCurrentMode())];
+    startQuestionSet(candidates.slice(0, count));
+    started = true;
+  } catch (error) {
+    showView("setup");
+    setupMessageEl.textContent = error instanceof Error ? error.message : "町丁目データを読み込めませんでした。";
+    setupMessageEl.classList.add("error");
+  } finally {
+    retryButton.disabled = false;
+    if (started) {
+      updateQuestionCountOptions();
+    } else {
+      startButton.disabled = false;
+    }
+  }
 }
 
 function startReview() {
@@ -1446,7 +1739,7 @@ function appendWrongMapResult(item, wrong) {
 
 function mapResultAnswers() {
   return mapAnswerResults.filter((answer) => (
-    (answer.quizMode === "map" || answer.quizMode === "mapAreaCode" || isLocalPlaceMapMode(answer.quizMode)) &&
+    (answer.quizMode === "map" || answer.quizMode === "municipalityMap" || answer.quizMode === "mapAreaCode" || isLocalPlaceMapMode(answer.quizMode)) &&
     Array.isArray(answer.correctCodes) &&
     answer.correctCodes.length > 0
   ));

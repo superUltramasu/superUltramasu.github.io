@@ -350,6 +350,25 @@ select {
   vector-effect: non-scaling-stroke;
 }
 
+.map-clickable {
+  cursor: pointer;
+  transition: fill 120ms ease;
+}
+
+.map-clickable:hover,
+.map-clickable:focus {
+  fill: #ffe75f;
+  outline: none;
+}
+
+.map-click-correct {
+  fill: #a7e957;
+}
+
+.map-click-wrong {
+  fill: #f05252;
+}
+
 .map-result-correct {
   fill: #a7e957;
   stroke: #123a1c;
