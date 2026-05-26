@@ -118,6 +118,14 @@ def preserve_readings(places, existing):
     return places
 
 
+def local_place_base_name(name):
+    return re.sub(r"[一二三四五六七八九十百〇零壱弐参１２３４５６７８９０0-9]+丁目$", "", name) or name
+
+
+def aggregate_place_count(places):
+    return len({local_place_base_name(place["name"]) for place in places})
+
+
 def write_local_place_file(item, places, topology):
     DATA_DIR.mkdir(exist_ok=True)
     payload = {
@@ -194,7 +202,7 @@ def main():
             "prefecture": item["prefecture"],
             "code": code,
             "name": item["name"],
-            "placeCount": len(places),
+            "placeCount": aggregate_place_count(places),
             "dataPath": f"./local-place-data/{code}.js",
             "available": True,
         }

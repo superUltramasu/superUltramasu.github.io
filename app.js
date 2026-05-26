@@ -200,7 +200,7 @@ function selectedLocalPlaceMunicipalityMetadata() {
 
 function selectedLocalPlaceQuestionCount() {
   const municipality = selectedLocalPlaceMunicipality();
-  return municipality?.places?.length ?? municipality?.placeCount ?? null;
+  return municipality?.places?.length ? aggregateLocalPlaces(municipality.places).length : municipality?.placeCount ?? null;
 }
 
 function localPlaceRemoteTopojsonPath(code) {
@@ -253,6 +253,47 @@ function normalizeLocalPlaceTopology(rawTopology) {
       }
     }
   };
+}
+
+function localPlaceBaseName(name) {
+  const base = name.replace(/[一二三四五六七八九十百〇零壱弐参１２３４５６７８９０0-9]+丁目$/, "");
+  return base || name;
+}
+
+function localPlaceBaseReading(reading) {
+  if (!reading) return "";
+  const suffixes = [
+    "じゅうきゅうちょうめ", "じゅうはっちょうめ", "じゅうななちょうめ", "じゅうろくちょうめ",
+    "じゅうごちょうめ", "じゅうよんちょうめ", "じゅうさんちょうめ", "じゅうにちょうめ", "じゅういっちょうめ",
+    "じゅっちょうめ", "じっちょうめ", "きゅうちょうめ", "くちょうめ", "はっちょうめ", "はちちょうめ",
+    "ななちょうめ", "しちちょうめ", "ろくちょうめ", "ごちょうめ", "よんちょうめ", "よちょうめ",
+    "しちょうめ", "さんちょうめ", "にちょうめ", "いっちょうめ"
+  ];
+  const suffix = suffixes.find((item) => reading.endsWith(item));
+  return suffix ? reading.slice(0, -suffix.length) : reading;
+}
+
+function aggregateLocalPlaces(places) {
+  const groups = new Map();
+  places.forEach((place) => {
+    const name = localPlaceBaseName(place.name);
+    if (!groups.has(name)) {
+      groups.set(name, {
+        name,
+        reading: localPlaceBaseReading(place.reading ?? ""),
+        code: place.code,
+        codes: []
+      });
+    }
+    const group = groups.get(name);
+    if (!group.codes.includes(place.code)) {
+      group.codes.push(place.code);
+    }
+    if (!group.reading && place.reading) {
+      group.reading = localPlaceBaseReading(place.reading);
+    }
+  });
+  return [...groups.values()];
 }
 
 function loadScriptOnce(src) {
@@ -328,11 +369,11 @@ function isPrefectureMapMode(quizMode = currentQuizMode()) {
 }
 
 function isLocalPlaceMapMode(quizMode = currentQuizMode()) {
-  return quizMode === "localPlaceMap";
+  return quizMode === "localPlaceMap" || quizMode === "localPlaceMapClick";
 }
 
 function isMapClickMode(quizMode = currentQuizMode()) {
-  return quizMode === "municipalityMap";
+  return quizMode === "municipalityMap" || quizMode === "localPlaceMapClick";
 }
 
 function normalizedMapMunicipalityName(name) {
@@ -703,7 +744,7 @@ function matchingMapAreaCodes() {
 function matchingLocalPlaces() {
   const metadata = selectedLocalPlaceMunicipalityMetadata();
   const municipality = metadata ? localPlaceDataForCode(metadata.code) : selectedLocalPlaceMunicipality();
-  return municipality?.places ?? [];
+  return municipality?.places ? aggregateLocalPlaces(municipality.places) : [];
 }
 
 function decodedArc(topology, arcIndex) {
@@ -1007,6 +1048,7 @@ function createLocalPlaceMapSvg(question, selectedCodes = new Set(), options = {
   const mapItems = geometries
     .map((geometry) => ({
       code: geometry.properties?.code ?? geometry.id,
+      name: localPlaceBaseName(geometry.properties?.name ?? ""),
       path: geometryPath(topology, geometry)
     }))
     .filter((item) => item.path);
@@ -1024,7 +1066,17 @@ function createLocalPlaceMapSvg(question, selectedCodes = new Set(), options = {
 function renderMapQuestion(question) {
   mapQuestionEl.innerHTML = "";
   if (isLocalPlaceMapMode()) {
-    mapQuestionEl.appendChild(createLocalPlaceMapSvg(question));
+    mapQuestionEl.appendChild(createLocalPlaceMapSvg(
+      question,
+      new Set(),
+      isMapClickMode()
+        ? {
+          hideTarget: true,
+          clickable: true,
+          onMapAnswer: answerMapClick
+        }
+        : {}
+    ));
     return;
   }
   mapQuestionEl.appendChild(createQuestionMapSvg(
@@ -1155,7 +1207,7 @@ function kanaToRoman(kana, style = "kunrei") {
 function optionReading(option) {
   const loadedLocalPlaceMunicipalities = Object.values(getLocalPlaceDataFiles());
   const localPlace = loadedLocalPlaceMunicipalities
-    .flatMap((municipality) => municipality.places ?? [])
+    .flatMap((municipality) => aggregateLocalPlaces(municipality.places ?? []))
     .find((place) => place.name === option);
   if (localPlace?.reading) return localPlace.reading.replace(/[^ぁ-ん]/g, "");
 
@@ -1248,7 +1300,7 @@ function availableQuestions() {
     return matchingLocalPlaces().map((item) => ({
       name: item.name,
       prefectures: [item.name],
-      codes: [item.code],
+      codes: item.codes ?? [item.code],
       localPlaceMunicipalityCode: municipality?.code
     }));
   }
@@ -1332,6 +1384,8 @@ function updateQuestionCountOptions() {
           ? "市区町村名から地図上の位置を当てるクイズの条件を選んで開始してください。"
         : quizMode === "mapAreaCode"
           ? "地図市外局番クイズの条件を選んで開始してください。"
+        : quizMode === "localPlaceMapClick"
+          ? "町丁目名から地図上の位置を当てるクイズの条件を選んで開始してください。"
         : localPlaceMode
           ? "町丁目地図クイズの条件を選んで開始してください。"
         : universityMode
@@ -1436,7 +1490,7 @@ function selectedMapCodesForAnswer(selectedAnswer, quizMode) {
   }
   if (isLocalPlaceMapMode(quizMode)) {
     const item = matchingLocalPlaces().find((place) => place.name === selectedAnswer);
-    return item ? [item.code] : [];
+    return item ? (item.codes ?? [item.code]) : [];
   }
   return matchingMapAreaCodes().find((question) => question.name === selectedAnswer)?.codes ?? [];
 }
@@ -1466,15 +1520,15 @@ function answerMapClick(selectedCode, selectedName, selectedPath) {
   const selectedText = selectedName ?? mapMunicipalityNameByCode(selectedCode);
 
   locked = true;
-  selectedPath.classList.add(correct ? "map-click-correct" : "map-click-wrong");
+  selectedPath.classList.add("map-click-selected");
   recordMapAnswerResult(quizMode, selectedPrefectures()[0], currentQuestion.codes, correct);
 
   if (correct) {
     score += 1;
-    feedbackEl.textContent = `正解です。${questionNameText}はここです。`;
+    feedbackEl.textContent = `正解です。選択した場所は${selectedText}です。`;
     feedbackEl.className = "feedback correct";
   } else {
-    feedbackEl.textContent = `残念！${questionNameText}はここでした。`;
+    feedbackEl.textContent = `残念！選択した場所は${selectedText}です。`;
     feedbackEl.className = "feedback wrong";
     wrongAnswers.push({
       name: currentQuestion.name,
@@ -1548,6 +1602,8 @@ function nextQuestion(options = {}) {
         ? "この市区町村は地図上のどこ？"
       : quizMode === "mapAreaCode"
         ? "青色で示された地域の市外局番は？"
+      : quizMode === "localPlaceMapClick"
+        ? "この地名は地図上のどこ？"
       : isLocalPlaceMapMode(quizMode)
         ? "青色で示された地名は？"
       : isUniversityMode(quizMode)

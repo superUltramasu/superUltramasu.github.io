@@ -1,2 +1,2 @@
-window.localPlaceMapData = {"source":{"name":"国勢調査町丁・字等別境界データセット（CODH作成）「令和2年国勢調査町丁・字等別境界データ」（e-Stat）を加工","url":"https://geoshape.ex.nii.ac.jp/ka/","license":"CC BY 4.0 / e-Stat terms of use"},"municipalities":[{"prefecture":"東京都","code":"13112","name":"世田谷区","placeCount":277,"dataPath":"./local-place-data/13112.js","available":true}]};
+window.localPlaceMapData = {"source":{"name":"国勢調査町丁・字等別境界データセット（CODH作成）「令和2年国勢調査町丁・字等別境界データ」（e-Stat）を加工","url":"https://geoshape.ex.nii.ac.jp/ka/","license":"CC BY 4.0 / e-Stat terms of use"},"municipalities":[{"prefecture":"東京都","code":"13112","name":"世田谷区","placeCount":61,"dataPath":"./local-place-data/13112.js","available":true}]};
 window.localPlaceDataFiles = window.localPlaceDataFiles || {};

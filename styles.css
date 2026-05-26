@@ -357,7 +357,7 @@ select {
 
 .map-clickable:hover,
 .map-clickable:focus {
-  fill: #ffe75f;
+  fill: blue;
   outline: none;
 }
 
@@ -367,6 +367,10 @@ select {
 
 .map-click-wrong {
   fill: #f05252;
+}
+
+.map-click-selected {
+  fill: blue;
 }
 
 .map-result-correct {
