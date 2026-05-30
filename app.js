@@ -260,6 +260,23 @@ function localPlaceBaseName(name) {
   return base || name;
 }
 
+function localPlaceDisplayName(name) {
+  const digitMap = { "一": 1, "二": 2, "三": 3, "四": 4, "五": 5, "六": 6, "七": 7, "八": 8, "九": 9 };
+  const kanjiNumber = (text) => {
+    if (text === "十") return 10;
+    if (text.startsWith("十")) return 10 + (digitMap[text.slice(1)] ?? 0);
+    if (text.includes("十")) {
+      const [tens, ones] = text.split("十");
+      return (digitMap[tens] ?? 1) * 10 + (digitMap[ones] ?? 0);
+    }
+    return digitMap[text] ?? text;
+  };
+  return name.replace(/([一二三四五六七八九十１２３４５６７８９0-9]+)丁目$/, (_, number) => {
+    const normalized = number.replace(/[１２３４５６７８９０]/g, (digit) => String("１２３４５６７８９０".indexOf(digit) + 1).replace("10", "0"));
+    return `${/^[一二三四五六七八九十]+$/.test(normalized) ? kanjiNumber(normalized) : normalized}丁目`;
+  });
+}
+
 function localPlaceBaseReading(reading) {
   if (!reading) return "";
   const suffixes = [
@@ -900,6 +917,9 @@ function appendMapPaths(parent, mapItems, targetCodes, selectedCodes, options = 
     if (item.name) {
       path.dataset.name = item.name;
     }
+    if (item.resultName) {
+      path.dataset.resultName = item.resultName;
+    }
     if (options.clickable && typeof options.onMapAnswer === "function") {
       path.setAttribute("tabindex", "0");
       path.setAttribute("role", "button");
@@ -1049,6 +1069,7 @@ function createLocalPlaceMapSvg(question, selectedCodes = new Set(), options = {
     .map((geometry) => ({
       code: geometry.properties?.code ?? geometry.id,
       name: localPlaceBaseName(geometry.properties?.name ?? ""),
+      resultName: localPlaceDisplayName(geometry.properties?.name ?? ""),
       path: geometryPath(topology, geometry)
     }))
     .filter((item) => item.path);
@@ -1501,6 +1522,24 @@ function mapMunicipalityNameByCode(code) {
   return matchingMapMunicipalities().find((municipality) => municipality.code === code)?.name ?? code;
 }
 
+function areaCodesForMapMunicipalityCode(code, prefectureName) {
+  const topology = getMapTopology();
+  const geometryIds = new Set(topology?.objects?.municipalities?.geometries?.map((geometry) => geometry.id) ?? []);
+  return getAreaCodeMapData()
+    .filter((item) => item.municipalities.some((municipality) => (
+      municipality.prefecture === prefectureName &&
+      mapDisplayCodeForMunicipality(municipality, geometryIds) === code
+    )))
+    .map((item) => item.areaCode);
+}
+
+function areaCodeResultMapLabel(code, municipalityName, prefectureName) {
+  const areaCodes = areaCodesForMapMunicipalityCode(code, prefectureName);
+  return areaCodes.length > 0
+    ? `${areaCodes.join("、")} (${municipalityName ?? code})`
+    : (municipalityName ?? code);
+}
+
 function recordMapAnswerResult(quizMode, selectedPrefectureName, correctCodes, isCorrect) {
   if (quizMode !== "map" && quizMode !== "municipalityMap" && !isAreaCodeMapMode(quizMode) && !isLocalPlaceMapMode(quizMode)) return;
   if (!Array.isArray(correctCodes) || correctCodes.length === 0) return;
@@ -1775,6 +1814,20 @@ function appendWrongDetail(item, wrong) {
   item.appendChild(detail);
 }
 
+function resultMapSelectionOptions(answer) {
+  if (isAreaCodeMapMode(answer.quizMode)) {
+    return {
+      labelForPath: (path) => areaCodeResultMapLabel(path.dataset.code, path.dataset.name, answer.selectedPrefectureName)
+    };
+  }
+  if (isLocalPlaceMapMode(answer.quizMode)) {
+    return {
+      labelForPath: (path) => path.dataset.resultName ?? path.dataset.name ?? path.dataset.code
+    };
+  }
+  return {};
+}
+
 function appendWrongMapResult(item, wrong) {
   const mapWrap = document.createElement("div");
   mapWrap.className = "wrong-map";
@@ -1789,7 +1842,7 @@ function appendWrongMapResult(item, wrong) {
     }
   );
   mapWrap.appendChild(svg);
-  appendResultMapSelection(mapWrap, svg);
+  appendResultMapSelection(mapWrap, svg, resultMapSelectionOptions(wrong));
 
   const legend = document.createElement("div");
   legend.className = "wrong-map-legend";
@@ -1801,14 +1854,14 @@ function appendWrongMapResult(item, wrong) {
   item.appendChild(mapWrap);
 }
 
-function appendResultMapSelection(container, svg) {
+function appendResultMapSelection(container, svg, options = {}) {
   const display = document.createElement("div");
   display.className = "result-map-selection";
   display.textContent = "地図上のエリアをクリックすると名前を表示します。";
 
   let selectedPath = null;
   svg.querySelectorAll("path[data-code]").forEach((path) => {
-    const label = path.dataset.name || path.dataset.code;
+    const label = options.labelForPath?.(path) ?? path.dataset.resultName ?? path.dataset.name ?? path.dataset.code;
     path.classList.add("map-result-selectable");
     path.setAttribute("tabindex", "0");
     path.setAttribute("role", "button");
@@ -1891,7 +1944,7 @@ function renderResultMapSummary(mapAnswers) {
 
   const svg = createResultMapSvgForAnswer(mapAnswers[0], mapQuestion, wrongCodes);
   resultMapSummaryEl.appendChild(svg);
-  appendResultMapSelection(resultMapSummaryEl, svg);
+  appendResultMapSelection(resultMapSummaryEl, svg, resultMapSelectionOptions(mapAnswers[0]));
 
   const legend = document.createElement("div");
   legend.className = "wrong-map-legend";
