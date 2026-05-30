@@ -1779,7 +1779,7 @@ function appendWrongMapResult(item, wrong) {
   const mapWrap = document.createElement("div");
   mapWrap.className = "wrong-map";
   const selectedCodes = new Set(wrong.selectedCodes ?? []);
-  mapWrap.appendChild(createQuestionMapSvg(
+  const svg = createQuestionMapSvg(
     wrong.question,
     wrong.selectedPrefectureName,
     selectedCodes,
@@ -1787,7 +1787,9 @@ function appendWrongMapResult(item, wrong) {
       resultMode: true,
       labelSuffix: "の不正解"
     }
-  ));
+  );
+  mapWrap.appendChild(svg);
+  appendResultMapSelection(mapWrap, svg);
 
   const legend = document.createElement("div");
   legend.className = "wrong-map-legend";
@@ -1797,6 +1799,39 @@ function appendWrongMapResult(item, wrong) {
   `;
   mapWrap.appendChild(legend);
   item.appendChild(mapWrap);
+}
+
+function appendResultMapSelection(container, svg) {
+  const display = document.createElement("div");
+  display.className = "result-map-selection";
+  display.textContent = "地図上のエリアをクリックすると名前を表示します。";
+
+  let selectedPath = null;
+  svg.querySelectorAll("path[data-code]").forEach((path) => {
+    const label = path.dataset.name || path.dataset.code;
+    path.classList.add("map-result-selectable");
+    path.setAttribute("tabindex", "0");
+    path.setAttribute("role", "button");
+    path.setAttribute("aria-label", label);
+
+    const selectPath = () => {
+      if (selectedPath && selectedPath !== path) {
+        selectedPath.classList.remove("map-result-selected");
+      }
+      selectedPath = path;
+      selectedPath.classList.add("map-result-selected");
+      display.textContent = `選択した場所: ${label}`;
+    };
+
+    path.addEventListener("click", selectPath);
+    path.addEventListener("keydown", (event) => {
+      if (event.key !== "Enter" && event.key !== " ") return;
+      event.preventDefault();
+      selectPath();
+    });
+  });
+
+  container.appendChild(display);
 }
 
 function mapResultAnswers() {
@@ -1854,7 +1889,9 @@ function renderResultMapSummary(mapAnswers) {
     codes: [...correctCodes]
   };
 
-  resultMapSummaryEl.appendChild(createResultMapSvgForAnswer(mapAnswers[0], mapQuestion, wrongCodes));
+  const svg = createResultMapSvgForAnswer(mapAnswers[0], mapQuestion, wrongCodes);
+  resultMapSummaryEl.appendChild(svg);
+  appendResultMapSelection(resultMapSummaryEl, svg);
 
   const legend = document.createElement("div");
   legend.className = "wrong-map-legend";

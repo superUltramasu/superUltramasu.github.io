@@ -357,7 +357,7 @@ select {
 
 .map-clickable:hover,
 .map-clickable:focus {
-  fill: blue;
+  fill: #ffe75f;
   outline: none;
 }
 
@@ -370,7 +370,7 @@ select {
 }
 
 .map-click-selected {
-  fill: blue;
+  fill: #1c36f2;
 }
 
 .map-result-correct {
@@ -385,6 +385,16 @@ select {
   stroke: #6f1414;
   stroke-width: 0.7;
   vector-effect: non-scaling-stroke;
+}
+
+.map-result-selectable {
+  cursor: pointer;
+  outline: none;
+  transition: fill 120ms ease;
+}
+
+.map-result-selected {
+  fill: #1c36f2;
 }
 
 .feedback {
@@ -608,6 +618,12 @@ select {
   border: 1px solid var(--line);
   border-radius: 8px;
   background: #f9fbfa;
+}
+
+.result-map-selection {
+  min-height: 26px;
+  color: var(--ink);
+  font-weight: 900;
 }
 
 .wrong-map-legend {
