@@ -365,7 +365,7 @@ async function ensureSelectedLocalPlaceDataLoaded() {
 }
 
 function isPrefectureMapMode(quizMode = currentQuizMode()) {
-  return quizMode === "map" || quizMode === "municipalityMap" || quizMode === "mapAreaCode";
+  return quizMode === "map" || quizMode === "municipalityMap" || quizMode === "mapAreaCode" || quizMode === "areaCodeMap";
 }
 
 function isLocalPlaceMapMode(quizMode = currentQuizMode()) {
@@ -373,7 +373,11 @@ function isLocalPlaceMapMode(quizMode = currentQuizMode()) {
 }
 
 function isMapClickMode(quizMode = currentQuizMode()) {
-  return quizMode === "municipalityMap" || quizMode === "localPlaceMapClick";
+  return quizMode === "municipalityMap" || quizMode === "areaCodeMap" || quizMode === "localPlaceMapClick";
+}
+
+function isAreaCodeMapMode(quizMode = currentQuizMode()) {
+  return quizMode === "mapAreaCode" || quizMode === "areaCodeMap";
 }
 
 function normalizedMapMunicipalityName(name) {
@@ -719,17 +723,13 @@ function matchingMapMunicipalities() {
 
 function matchingMapAreaCodes() {
   const selectedPref = selectedPrefectures()[0];
-  const types = selectedTypes();
   const topology = getMapTopology();
   const geometryIds = new Set(topology?.objects?.municipalities?.geometries?.map((geometry) => geometry.id) ?? []);
 
   return getAreaCodeMapData()
     .map((item) => {
       const codes = item.municipalities
-        .filter((municipality) => (
-          municipality.prefecture === selectedPref &&
-          types.includes(municipality.type)
-        ))
+        .filter((municipality) => municipality.prefecture === selectedPref)
         .map((municipality) => mapDisplayCodeForMunicipality(municipality, geometryIds))
         .filter(Boolean);
       return {
@@ -1291,7 +1291,7 @@ function availableQuestions() {
     }));
   }
 
-  if (currentQuizMode() === "mapAreaCode") {
+  if (isAreaCodeMapMode()) {
     return matchingMapAreaCodes();
   }
 
@@ -1330,7 +1330,7 @@ function updateQuestionCountOptions() {
   const typeCount = selectedTypes().length;
   const quizMode = currentQuizMode();
   const areaCodeMode = quizMode === "areaCode";
-  const municipalityMode = quizMode === "municipality" || quizMode === "map" || quizMode === "municipalityMap" || quizMode === "mapAreaCode";
+  const municipalityMode = quizMode === "municipality" || quizMode === "map" || quizMode === "municipalityMap";
   const localPlaceMode = isLocalPlaceMapMode(quizMode);
   const universityMode = isUniversityMode(quizMode);
   const universityLabel = universityCategoryLabel(quizMode);
@@ -1362,7 +1362,7 @@ function updateQuestionCountOptions() {
   if (regionCount === 0) {
     setupMessageEl.textContent = localPlaceMode
       ? "県を選び、市区町村を1つ選んでください。"
-      : quizMode === "map" || quizMode === "mapAreaCode"
+      : isPrefectureMapMode(quizMode)
       ? "県を1つ選んでください。"
       : "地方を1つ以上選んでください。";
   } else if (municipalityMode && typeCount === 0) {
@@ -1384,6 +1384,8 @@ function updateQuestionCountOptions() {
           ? "市区町村名から地図上の位置を当てるクイズの条件を選んで開始してください。"
         : quizMode === "mapAreaCode"
           ? "地図市外局番クイズの条件を選んで開始してください。"
+        : quizMode === "areaCodeMap"
+          ? "市外局番から地図上の位置を当てるクイズの条件を選んで開始してください。"
         : quizMode === "localPlaceMapClick"
           ? "町丁目名から地図上の位置を当てるクイズの条件を選んで開始してください。"
         : localPlaceMode
@@ -1480,7 +1482,7 @@ function setOptionsDisabled(disabled) {
 }
 
 function selectedMapCodesForAnswer(selectedAnswer, quizMode) {
-  if (quizMode !== "map" && quizMode !== "municipalityMap" && quizMode !== "mapAreaCode" && !isLocalPlaceMapMode(quizMode)) return [];
+  if (quizMode !== "map" && quizMode !== "municipalityMap" && !isAreaCodeMapMode(quizMode) && !isLocalPlaceMapMode(quizMode)) return [];
   if (quizMode === "map") {
     const item = matchingMapMunicipalities().find((municipality) => municipality.name === selectedAnswer);
     return item ? [item.code] : [];
@@ -1500,7 +1502,7 @@ function mapMunicipalityNameByCode(code) {
 }
 
 function recordMapAnswerResult(quizMode, selectedPrefectureName, correctCodes, isCorrect) {
-  if (quizMode !== "map" && quizMode !== "municipalityMap" && quizMode !== "mapAreaCode" && !isLocalPlaceMapMode(quizMode)) return;
+  if (quizMode !== "map" && quizMode !== "municipalityMap" && !isAreaCodeMapMode(quizMode) && !isLocalPlaceMapMode(quizMode)) return;
   if (!Array.isArray(correctCodes) || correctCodes.length === 0) return;
   mapAnswerResults.push({
     quizMode,
@@ -1548,7 +1550,9 @@ function answerMapClick(selectedCode, selectedName, selectedPath) {
 
   answered += 1;
   updateScoreboard();
-  nextQuestion({ keepFeedback: true });
+  window.setTimeout(() => {
+    nextQuestion({ keepFeedback: true });
+  }, 500);
 }
 
 function nextQuestion(options = {}) {
@@ -1570,7 +1574,7 @@ function nextQuestion(options = {}) {
   renderOptions();
 
   const quizMode = currentQuizMode();
-  const mapQuestionMode = quizMode === "map" || quizMode === "municipalityMap" || quizMode === "mapAreaCode" || isLocalPlaceMapMode(quizMode);
+  const mapQuestionMode = quizMode === "map" || quizMode === "municipalityMap" || isAreaCodeMapMode(quizMode) || isLocalPlaceMapMode(quizMode);
   municipalityEl.classList.toggle("hidden", quizMode === "diamond" || (mapQuestionMode && !isMapClickMode(quizMode)));
   questionImageEl.classList.toggle("hidden", quizMode !== "diamond");
   mapQuestionEl.classList.toggle("hidden", !mapQuestionMode);
@@ -1602,6 +1606,8 @@ function nextQuestion(options = {}) {
         ? "この市区町村は地図上のどこ？"
       : quizMode === "mapAreaCode"
         ? "青色で示された地域の市外局番は？"
+      : quizMode === "areaCodeMap"
+        ? "この市外局番は地図上のどこ？"
       : quizMode === "localPlaceMapClick"
         ? "この地名は地図上のどこ？"
       : isLocalPlaceMapMode(quizMode)
@@ -1795,7 +1801,7 @@ function appendWrongMapResult(item, wrong) {
 
 function mapResultAnswers() {
   return mapAnswerResults.filter((answer) => (
-    (answer.quizMode === "map" || answer.quizMode === "municipalityMap" || answer.quizMode === "mapAreaCode" || isLocalPlaceMapMode(answer.quizMode)) &&
+    (answer.quizMode === "map" || answer.quizMode === "municipalityMap" || isAreaCodeMapMode(answer.quizMode) || isLocalPlaceMapMode(answer.quizMode)) &&
     Array.isArray(answer.correctCodes) &&
     answer.correctCodes.length > 0
   ));
