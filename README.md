@@ -2,7 +2,7 @@
 
 ## 画像について
 
-`diamond-images/`, `tomare-images/` 内の横断歩道ダイヤ画像は、GeoJapan の Sloor 様が作成した画像をスクリーンショットで切り抜いたものです。
+`diamond-images/`, `tomare-images/` 内の横断歩道ダイヤ、止まれ標示の画像は、GeoJapan の Sloor 様が作成した画像をスクリーンショットで切り抜いたものです。
 
 このリポジトリでは、横断歩道ダイヤクイズの問題画像として使用しています。
 
