@@ -350,6 +350,14 @@ select {
   vector-effect: non-scaling-stroke;
 }
 
+.map-lake {
+  fill: #f9fbfa;
+  stroke: #f9fbfa;
+  stroke-width: 1.2;
+  pointer-events: auto;
+  vector-effect: non-scaling-stroke;
+}
+
 .map-clickable {
   cursor: pointer;
   transition: fill 120ms ease;
@@ -389,12 +397,12 @@ select {
 
 .map-result-selectable {
   cursor: pointer;
-  outline: none;
   transition: fill 120ms ease;
 }
 
 .map-result-selected {
   fill: #1c36f2;
+  stroke: #17211e;
 }
 
 .feedback {

@@ -84,6 +84,65 @@ const parentCityCodeByName = {
   "熊本市": "43201"
 };
 
+const mapLakeOverlays = [
+  { name: "サロマ湖", prefectures: ["北海道"], cx: 574, cy: 75, rx: 8, ry: 3 },
+  { name: "網走湖", prefectures: ["北海道"], cx: 566, cy: 84, rx: 3, ry: 3 },
+  { name: "屈斜路湖", prefectures: ["北海道"], cx: 557, cy: 91, rx: 4, ry: 4 },
+  { name: "摩周湖", prefectures: ["北海道"], cx: 563, cy: 91, rx: 2, ry: 2 },
+  { name: "支笏湖", prefectures: ["北海道"], cx: 501, cy: 117, rx: 4, ry: 3 },
+  { name: "洞爺湖", prefectures: ["北海道"], cx: 487, cy: 124, rx: 3, ry: 2 },
+  { name: "十和田湖", prefectures: ["青森県", "秋田県"], cx: 483, cy: 173, rx: 4, ry: 3 },
+  { name: "小川原湖", prefectures: ["青森県"], cx: 493, cy: 157, rx: 2, ry: 6 },
+  { name: "猪苗代湖", prefectures: ["福島県"], cx: 474, cy: 267, rx: 6, ry: 3 },
+  { name: "中禅寺湖", prefectures: ["栃木県"], cx: 459, cy: 284, rx: 3, ry: 2 },
+  {
+    name: "霞ヶ浦",
+    prefectures: ["茨城県"],
+    points: [
+      [471, 294], [474, 291], [478, 292], [481, 294], [485, 293], [488, 296],
+      [486, 299], [482, 300], [480, 303], [476, 302], [474, 299], [470, 298]
+    ]
+  },
+  {
+    name: "北浦",
+    prefectures: ["茨城県"],
+    points: [
+      [486, 288], [489, 290], [490, 294], [490, 298], [489, 302], [488, 306],
+      [486, 308], [484, 305], [485, 301], [486, 297], [485, 293]
+    ]
+  },
+  {
+    name: "涸沼",
+    prefectures: ["茨城県"],
+    points: [[469, 302], [471, 301], [474, 302], [475, 304], [472, 305], [469, 304]]
+  },
+  { name: "河口湖", prefectures: ["山梨県"], cx: 435, cy: 321, rx: 3, ry: 1 },
+  { name: "山中湖", prefectures: ["山梨県"], cx: 441, cy: 325, rx: 2, ry: 1 },
+  { name: "本栖湖", prefectures: ["山梨県"], cx: 431, cy: 321, rx: 2, ry: 1 },
+  { name: "諏訪湖", prefectures: ["長野県"], cx: 421, cy: 310, rx: 3, ry: 2 },
+  {
+    name: "浜名湖",
+    prefectures: ["静岡県"],
+    points: [[411, 336], [415, 334], [420, 336], [421, 340], [418, 343], [414, 342], [411, 340]]
+  },
+  {
+    name: "琵琶湖",
+    prefectures: ["滋賀県"],
+    points: [[374, 307], [379, 311], [381, 318], [379, 327], [377, 337], [372, 333], [370, 323], [371, 314]]
+  },
+  {
+    name: "中海",
+    prefectures: ["鳥取県", "島根県"],
+    points: [[289, 313], [294, 311], [301, 312], [304, 315], [300, 317], [293, 317], [288, 315]]
+  },
+  {
+    name: "宍道湖",
+    prefectures: ["島根県"],
+    points: [[278, 314], [284, 312], [292, 313], [295, 315], [291, 318], [283, 318], [277, 316]]
+  },
+  { name: "池田湖", prefectures: ["鹿児島県"], cx: 220, cy: 439, rx: 3, ry: 2 }
+];
+
 const regionOptionsEl = document.querySelector("#regionOptions");
 const regionLegendEl = document.querySelector("#regionLegend");
 const quizModeRadios = [...document.querySelectorAll('input[name="quizMode"]')];
@@ -148,12 +207,37 @@ function getDiamondData() {
   return Array.isArray(window.diamondData) ? window.diamondData : [];
 }
 
+function getTomareData() {
+  return Array.isArray(window.tomareData) ? window.tomareData : [];
+}
+
+function isImagePrefectureMode(mode = currentQuizMode()) {
+  return mode === "diamond" || mode === "tomare";
+}
+
 function getMapTopology() {
   return window.japanMapTopology ?? null;
 }
 
 function getMunicipalityCodeData() {
   return Array.isArray(window.municipalityCodeData) ? window.municipalityCodeData : [];
+}
+
+function getPrefectureMapPathOverrides() {
+  return window.prefectureMapPathOverrides ?? {};
+}
+
+function getMapGeometryIds() {
+  const topology = getMapTopology();
+  const ids = new Set(topology?.objects?.municipalities?.geometries?.map((geometry) => geometry.id) ?? []);
+  Object.values(getPrefectureMapPathOverrides()).forEach((config) => {
+    const items = Array.isArray(config) ? config : config?.items;
+    if (!Array.isArray(items)) return;
+    items.forEach((item) => {
+      if (item.code) ids.add(item.code);
+    });
+  });
+  return ids;
 }
 
 function getLocalPlaceMapData() {
@@ -405,8 +489,7 @@ function normalizedMapMunicipalityName(name) {
 }
 
 function getAugmentedMunicipalityCodeData() {
-  const topology = getMapTopology();
-  const geometryIds = new Set(topology?.objects?.municipalities?.geometries?.map((geometry) => geometry.id) ?? []);
+  const geometryIds = getMapGeometryIds();
   const items = [...getMunicipalityCodeData()];
   const seenCodes = new Set(items.map((item) => item.code));
   const byNormalizedName = new Map(items.map((item) => [
@@ -684,6 +767,19 @@ function matchingDiamonds() {
     .filter((item) => item.prefectures.length > 0);
 }
 
+function matchingTomareSigns() {
+  const prefs = selectedPrefectures();
+  return getTomareData()
+    .map((item, index) => ({
+      name: `止まれ標示 ${index + 1}`,
+      image: `./tomare-images/${item.image}`,
+      prefectures: prefectures.filter((prefecture) => (
+        prefs.includes(prefecture) && item.prefectures.includes(prefecture)
+      ))
+    }))
+    .filter((item) => item.prefectures.length > 0);
+}
+
 function matchingMunicipalities() {
   const prefs = selectedPrefectures();
   const types = selectedTypes();
@@ -727,8 +823,7 @@ function universityCategoryLabel(quizMode = currentQuizMode()) {
 function matchingMapMunicipalities() {
   const selectedPref = selectedPrefectures()[0];
   const types = selectedTypes();
-  const topology = getMapTopology();
-  const geometryIds = new Set(topology?.objects?.municipalities?.geometries?.map((geometry) => geometry.id) ?? []);
+  const geometryIds = getMapGeometryIds();
   return getAugmentedMunicipalityCodeData()
     .filter((item) => item.prefecture === selectedPref && types.includes(item.type))
     .map((item) => ({
@@ -740,8 +835,7 @@ function matchingMapMunicipalities() {
 
 function matchingMapAreaCodes() {
   const selectedPref = selectedPrefectures()[0];
-  const topology = getMapTopology();
-  const geometryIds = new Set(topology?.objects?.municipalities?.geometries?.map((geometry) => geometry.id) ?? []);
+  const geometryIds = getMapGeometryIds();
 
   return getAreaCodeMapData()
     .map((item) => {
@@ -920,6 +1014,9 @@ function appendMapPaths(parent, mapItems, targetCodes, selectedCodes, options = 
     if (item.resultName) {
       path.dataset.resultName = item.resultName;
     }
+    if (item.fillRule) {
+      path.setAttribute("fill-rule", item.fillRule);
+    }
     if (options.clickable && typeof options.onMapAnswer === "function") {
       path.setAttribute("tabindex", "0");
       path.setAttribute("role", "button");
@@ -935,6 +1032,47 @@ function appendMapPaths(parent, mapItems, targetCodes, selectedCodes, options = 
   });
 }
 
+function lakePath(lake) {
+  if (Array.isArray(lake.points) && lake.points.length > 2) {
+    return lake.points
+      .map(([x, y], index) => `${index === 0 ? "M" : "L"} ${x} ${y}`)
+      .join(" ") + " Z";
+  }
+
+  const { cx, cy, rx, ry } = lake;
+  const points = [
+    [cx - rx, cy - ry * 0.1],
+    [cx - rx * 0.72, cy - ry * 0.82],
+    [cx - rx * 0.18, cy - ry],
+    [cx + rx * 0.52, cy - ry * 0.68],
+    [cx + rx, cy - ry * 0.05],
+    [cx + rx * 0.7, cy + ry * 0.72],
+    [cx + rx * 0.08, cy + ry],
+    [cx - rx * 0.58, cy + ry * 0.62]
+  ];
+  return points.map(([x, y], index) => `${index === 0 ? "M" : "L"} ${x.toFixed(2)} ${y.toFixed(2)}`).join(" ") + " Z";
+}
+
+function mapLakeData() {
+  return Array.isArray(window.mapLakeData) && window.mapLakeData.length > 0 ? window.mapLakeData : mapLakeOverlays;
+}
+
+function appendLakePaths(parent, selectedPref, options = {}) {
+  if (options.showLakes === false) return;
+  mapLakeData()
+    .filter((lake) => lake.prefectures.includes(selectedPref))
+    .forEach((lake) => {
+      const lakePaths = Array.isArray(lake.paths) && lake.paths.length > 0 ? lake.paths : [lakePath(lake)];
+      lakePaths.forEach((pathData) => {
+        const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+        path.setAttribute("d", pathData);
+        path.setAttribute("class", "map-lake");
+        path.setAttribute("aria-label", lake.name);
+        parent.appendChild(path);
+      });
+    });
+}
+
 function createMapSvg(mapItems, targetCodes, selectedPref, labelSuffix = "", selectedCodes = new Set(), options = {}) {
   const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
   svg.setAttribute("viewBox", mapBounds(mapItems.map((item) => item.path)));
@@ -942,6 +1080,61 @@ function createMapSvg(mapItems, targetCodes, selectedPref, labelSuffix = "", sel
   svg.setAttribute("aria-label", `${selectedPref}の地図${labelSuffix}`);
 
   appendMapPaths(svg, mapItems, targetCodes, selectedCodes, options);
+  appendLakePaths(svg, selectedPref, options);
+
+  return svg;
+}
+
+function createOverrideMapSvg(overrideConfig, mapItems, targetCodes, selectedPref, labelSuffix = "", selectedCodes = new Set(), options = {}) {
+  if (!overrideConfig?.svg) return null;
+  const parsed = new DOMParser().parseFromString(overrideConfig.svg, "image/svg+xml");
+  const svg = parsed.documentElement;
+  if (!svg || svg.nodeName.toLowerCase() !== "svg" || svg.querySelector("parsererror")) return null;
+
+  svg.setAttribute("role", "img");
+  svg.setAttribute("aria-label", `${selectedPref}の地図${labelSuffix}`);
+  svg.classList.add("map-raw-override");
+
+  const itemByCode = new Map(mapItems.map((item) => [item.code, item]));
+  svg.querySelectorAll("path").forEach((path) => {
+    const code = path.id?.match(/^M(\d{5})$/)?.[1];
+    if (!code) return;
+    const item = itemByCode.get(code);
+    if (item?.path) {
+      path.setAttribute("d", item.path);
+    }
+    path.removeAttribute("fill");
+    path.removeAttribute("fill-opacity");
+    path.removeAttribute("style");
+    path.dataset.code = code;
+    if (item?.name) {
+      path.dataset.name = item.name;
+    }
+    if (item?.resultName) {
+      path.dataset.resultName = item.resultName;
+    }
+    path.setAttribute("class", mapPathClass(code, targetCodes, selectedCodes, options.resultMode, options));
+    if (item?.fillRule) {
+      path.setAttribute("fill-rule", item.fillRule);
+    } else {
+      path.removeAttribute("fill-rule");
+    }
+    if (options.clickable && typeof options.onMapAnswer === "function") {
+      path.setAttribute("tabindex", "0");
+      path.setAttribute("role", "button");
+      path.setAttribute("aria-label", item?.name ?? code);
+      path.addEventListener("click", () => options.onMapAnswer(code, item?.name, path));
+      path.addEventListener("keydown", (event) => {
+        if (event.key !== "Enter" && event.key !== " ") return;
+        event.preventDefault();
+        options.onMapAnswer(code, item?.name, path);
+      });
+    } else {
+      path.removeAttribute("tabindex");
+      path.removeAttribute("role");
+      path.removeAttribute("aria-label");
+    }
+  });
 
   return svg;
 }
@@ -988,6 +1181,7 @@ function appendInsetMap(parent, section, targetCodes, bounds, selectedCodes = ne
   inset.setAttribute("preserveAspectRatio", "xMidYMid meet");
 
   appendMapPaths(inset, section, targetCodes, selectedCodes, options);
+  appendLakePaths(inset, options.selectedPref ?? "", options);
 
   parent.appendChild(inset);
 }
@@ -1027,7 +1221,7 @@ function createCompositeMapSvg(sections, targetCodes, selectedPref, selectedCode
       y: 40 + Math.floor(index / 3) * 190,
       width: 230,
       height: 170
-    }, selectedCodes, options);
+    }, selectedCodes, { ...options, selectedPref });
   });
 
   return svg;
@@ -1042,21 +1236,45 @@ function createQuestionMapSvg(question, selectedPref, selectedCodes = new Set(),
   const targetCodes = new Set(question.codes);
   question.codes.forEach((code) => candidateCodes.add(code));
   selectedCodes.forEach((code) => candidateCodes.add(code));
-  const mapItems = geometries
-    .filter((geometry) => candidateCodes.has(geometry.id))
-    .map((geometry) => ({
-      code: geometry.id,
-      name: candidateByCode.get(geometry.id)?.name,
-      path: geometryPath(topology, geometry)
-    }))
+  const overrideConfig = getPrefectureMapPathOverrides()[selectedPref];
+  const overridePaths = Array.isArray(overrideConfig) ? overrideConfig : overrideConfig?.items;
+  const hasOverridePaths = Array.isArray(overridePaths);
+  const sourceItems = hasOverridePaths
+    ? overridePaths
+    : geometries.filter((item) => candidateCodes.has(item.code ?? item.id));
+  const mapItems = sourceItems
+    .map((item) => {
+      const code = item.code ?? item.id;
+      return {
+        code,
+        name: candidateByCode.get(code)?.name,
+        path: item.path ?? geometryPath(topology, item),
+        fillRule: item.fillRule
+      };
+    })
     .filter((item) => item.path);
-
-  const sections = sectionMapItems(mapItems, selectedPref);
-  if (sections.length === 1) {
-    return createMapSvg(sections[0], targetCodes, selectedPref, options.labelSuffix ?? "", selectedCodes, options);
+  const mapOptions = hasOverridePaths ? { ...options, showLakes: false } : options;
+  if (hasOverridePaths && overrideConfig?.svg) {
+    const overrideSvg = createOverrideMapSvg(
+      overrideConfig,
+      mapItems,
+      targetCodes,
+      selectedPref,
+      options.labelSuffix ?? "",
+      selectedCodes,
+      mapOptions
+    );
+    if (overrideSvg) return overrideSvg;
   }
 
-  return createCompositeMapSvg(sections, targetCodes, selectedPref, selectedCodes, options);
+  const sections = hasOverridePaths && overrideConfig?.keepTogether
+    ? [mapItems]
+    : sectionMapItems(mapItems, selectedPref);
+  if (sections.length === 1) {
+    return createMapSvg(sections[0], targetCodes, selectedPref, options.labelSuffix ?? "", selectedCodes, mapOptions);
+  }
+
+  return createCompositeMapSvg(sections, targetCodes, selectedPref, selectedCodes, mapOptions);
 }
 
 function createLocalPlaceMapSvg(question, selectedCodes = new Set(), options = {}) {
@@ -1296,6 +1514,10 @@ function availableQuestions() {
     return matchingDiamonds();
   }
 
+  if (currentQuizMode() === "tomare") {
+    return matchingTomareSigns();
+  }
+
   if (currentQuizMode() === "map") {
     return matchingMapMunicipalities().map((item) => ({
       name: item.name,
@@ -1399,6 +1621,8 @@ function updateQuestionCountOptions() {
       ? "市外局番クイズの条件を選んで開始してください。"
       : quizMode === "diamond"
         ? "横断歩道ダイヤクイズの条件を選んで開始してください。"
+      : quizMode === "tomare"
+        ? "「止まれ」標示クイズの条件を選んで開始してください。"
         : quizMode === "map"
           ? "地図クイズの条件を選んで開始してください。"
         : quizMode === "municipalityMap"
@@ -1469,7 +1693,7 @@ function answerCandidatesForCurrentMode() {
       .flatMap((item) => item.answers);
   }
 
-  if (currentQuizMode() === "diamond") {
+  if (isImagePrefectureMode()) {
     return selectedPrefectures();
   }
 
@@ -1523,8 +1747,7 @@ function mapMunicipalityNameByCode(code) {
 }
 
 function areaCodesForMapMunicipalityCode(code, prefectureName) {
-  const topology = getMapTopology();
-  const geometryIds = new Set(topology?.objects?.municipalities?.geometries?.map((geometry) => geometry.id) ?? []);
+  const geometryIds = getMapGeometryIds();
   return getAreaCodeMapData()
     .filter((item) => item.municipalities.some((municipality) => (
       municipality.prefecture === prefectureName &&
@@ -1614,14 +1837,14 @@ function nextQuestion(options = {}) {
 
   const quizMode = currentQuizMode();
   const mapQuestionMode = quizMode === "map" || quizMode === "municipalityMap" || isAreaCodeMapMode(quizMode) || isLocalPlaceMapMode(quizMode);
-  municipalityEl.classList.toggle("hidden", quizMode === "diamond" || (mapQuestionMode && !isMapClickMode(quizMode)));
-  questionImageEl.classList.toggle("hidden", quizMode !== "diamond");
+  municipalityEl.classList.toggle("hidden", isImagePrefectureMode(quizMode) || (mapQuestionMode && !isMapClickMode(quizMode)));
+  questionImageEl.classList.toggle("hidden", !isImagePrefectureMode(quizMode));
   mapQuestionEl.classList.toggle("hidden", !mapQuestionMode);
   optionsWrapEl.classList.toggle("hidden", isMapClickMode(quizMode));
-  if (quizMode === "diamond") {
+  if (isImagePrefectureMode(quizMode)) {
     municipalityEl.textContent = "";
     questionImageEl.src = currentQuestion.image;
-    questionImageEl.alt = "横断歩道ダイヤ";
+    questionImageEl.alt = quizMode === "diamond" ? "横断歩道ダイヤ" : "止まれ標示";
     mapQuestionEl.innerHTML = "";
   } else if (mapQuestionMode) {
     municipalityEl.textContent = isMapClickMode(quizMode) ? currentQuestion.name : "";
@@ -1639,6 +1862,8 @@ function nextQuestion(options = {}) {
     ? "この市外局番が使われている代表地域は？"
     : quizMode === "diamond"
       ? "この横断歩道ダイヤが存在する都道府県は？"
+    : quizMode === "tomare"
+      ? "この「止まれ」標示が存在する都道府県は？"
       : quizMode === "map"
         ? "赤色で示された市区町村は？"
       : quizMode === "municipalityMap"
@@ -1687,8 +1912,8 @@ function answer(selectedPrefecture, selectedButton) {
     locked = true;
     score += 1;
     recordMapAnswerResult(quizMode, selectedPrefectures()[0], currentQuestion.codes, true);
-    feedbackEl.textContent = quizMode === "diamond"
-      ? `正解です。このダイヤは${correctText}です。`
+    feedbackEl.textContent = isImagePrefectureMode(quizMode)
+      ? `正解です。この${quizMode === "diamond" ? "ダイヤ" : "「止まれ」標示"}は${correctText}です。`
       : quizMode === "map"
         ? `正解です。赤色の場所は${correctText}です。`
       : quizMode === "mapAreaCode"
@@ -1704,8 +1929,8 @@ function answer(selectedPrefecture, selectedButton) {
     selectedButton.classList.add("wrong");
     const wrongSelectedCodes = selectedMapCodesForAnswer(selectedPrefecture, quizMode);
     recordMapAnswerResult(quizMode, selectedPrefectures()[0], currentQuestion.codes, false);
-    feedbackEl.textContent = quizMode === "diamond"
-      ? `残念！このダイヤは${correctText}でした。`
+    feedbackEl.textContent = isImagePrefectureMode(quizMode)
+      ? `残念！この${quizMode === "diamond" ? "ダイヤ" : "「止まれ」標示"}は${correctText}でした。`
       : quizMode === "map"
         ? `残念！赤色の場所は${correctText}でした。`
       : quizMode === "mapAreaCode"
@@ -1995,7 +2220,7 @@ function showResult() {
         const image = document.createElement("img");
         image.className = "wrong-question-image";
         image.src = wrong.question.image;
-        image.alt = "不正解だった横断歩道ダイヤ";
+        image.alt = wrong.quizMode === "tomare" ? "不正解だった止まれ標示" : "不正解だった横断歩道ダイヤ";
         item.appendChild(image);
         appendWrongDetail(item, wrong);
       } else {
