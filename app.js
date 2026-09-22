@@ -162,8 +162,12 @@ const resultSetupButton = document.querySelector("#resultSetupButton");
 const municipalityEl = document.querySelector("#municipality");
 const quizPromptEl = document.querySelector("#quizPrompt");
 const questionImageEl = document.querySelector("#questionImage");
+const questionImagePairEl = document.querySelector("#questionImagePair");
+const diamondPairImageEl = document.querySelector("#diamondPairImage");
+const tomarePairImageEl = document.querySelector("#tomarePairImage");
 const mapQuestionEl = document.querySelector("#mapQuestion");
 const answerFilterEl = document.querySelector("#answerFilter");
+const answerSubmitButtonEl = document.querySelector("#answerSubmitButton");
 const optionsWrapEl = document.querySelector(".options-wrap");
 const optionsEl = document.querySelector("#options");
 const feedbackEl = document.querySelector("#feedback");
@@ -212,7 +216,7 @@ function getTomareData() {
 }
 
 function isImagePrefectureMode(mode = currentQuizMode()) {
-  return mode === "diamond" || mode === "tomare";
+  return mode === "diamond" || mode === "tomare" || mode === "diamondTomare";
 }
 
 function getMapTopology() {
@@ -778,6 +782,20 @@ function matchingTomareSigns() {
       ))
     }))
     .filter((item) => item.prefectures.length > 0);
+}
+
+function matchingDiamondTomarePairs() {
+  const diamonds = matchingDiamonds();
+  const signs = matchingTomareSigns();
+  return diamonds.flatMap((diamond) => signs.flatMap((sign) => {
+    const shared = diamond.prefectures.filter((prefecture) => sign.prefectures.includes(prefecture));
+    return shared.length > 0 ? [{
+      name: `${diamond.name} × ${sign.name}`,
+      image: diamond.image,
+      tomareImage: sign.image,
+      prefectures: shared
+    }] : [];
+  }));
 }
 
 function matchingMunicipalities() {
@@ -1480,6 +1498,10 @@ function optionMatchesFilter(option, filterText) {
   return optionFilterKeys(option).some((key) => key.startsWith(query));
 }
 
+function optionMatchesAnyFilterTerm(option, filterText) {
+  return filterText.trim().split(/\s+/).some((term) => optionMatchesFilter(option, term));
+}
+
 function buildQuestions(items) {
   const groups = new Map();
   items.forEach((item) => {
@@ -1516,6 +1538,10 @@ function availableQuestions() {
 
   if (currentQuizMode() === "tomare") {
     return matchingTomareSigns();
+  }
+
+  if (currentQuizMode() === "diamondTomare") {
+    return matchingDiamondTomarePairs();
   }
 
   if (currentQuizMode() === "map") {
@@ -1623,6 +1649,8 @@ function updateQuestionCountOptions() {
         ? "横断歩道ダイヤクイズの条件を選んで開始してください。"
       : quizMode === "tomare"
         ? "「止まれ」標示クイズの条件を選んで開始してください。"
+      : quizMode === "diamondTomare"
+        ? "ダイヤと「止まれ」標示の複合クイズの条件を選んで開始してください。"
         : quizMode === "map"
           ? "地図クイズの条件を選んで開始してください。"
         : quizMode === "municipalityMap"
@@ -1668,7 +1696,7 @@ function renderOptions() {
   optionsEl.innerHTML = "";
   const filterText = answerFilterEl.value;
   optionPrefectures
-    .filter((prefecture) => optionMatchesFilter(prefecture, filterText))
+    .filter((prefecture) => optionMatchesAnyFilterTerm(prefecture, filterText))
     .forEach((prefecture) => {
     const button = document.createElement("button");
     button.type = "button";
@@ -1683,6 +1711,7 @@ function renderOptions() {
     button.addEventListener("click", () => answer(prefecture, button));
     optionsEl.appendChild(button);
   });
+  answerSubmitButtonEl.disabled = !currentQuestion || locked || optionsEl.childElementCount === 0;
 }
 
 function answerCandidatesForCurrentMode() {
@@ -1724,6 +1753,7 @@ function setOptionsDisabled(disabled) {
   document.querySelectorAll(".pref-button").forEach((button) => {
     button.disabled = disabled;
   });
+  answerSubmitButtonEl.disabled = disabled || !currentQuestion || optionsEl.childElementCount === 0;
 }
 
 function selectedMapCodesForAnswer(selectedAnswer, quizMode) {
@@ -1838,23 +1868,36 @@ function nextQuestion(options = {}) {
   const quizMode = currentQuizMode();
   const mapQuestionMode = quizMode === "map" || quizMode === "municipalityMap" || isAreaCodeMapMode(quizMode) || isLocalPlaceMapMode(quizMode);
   municipalityEl.classList.toggle("hidden", isImagePrefectureMode(quizMode) || (mapQuestionMode && !isMapClickMode(quizMode)));
-  questionImageEl.classList.toggle("hidden", !isImagePrefectureMode(quizMode));
+  questionImageEl.classList.toggle("hidden", quizMode !== "diamond" && quizMode !== "tomare");
+  questionImagePairEl.classList.toggle("hidden", quizMode !== "diamondTomare");
   mapQuestionEl.classList.toggle("hidden", !mapQuestionMode);
   optionsWrapEl.classList.toggle("hidden", isMapClickMode(quizMode));
-  if (isImagePrefectureMode(quizMode)) {
+  if (quizMode === "diamondTomare") {
+    municipalityEl.textContent = "";
+    questionImageEl.removeAttribute("src");
+    diamondPairImageEl.src = currentQuestion.image;
+    tomarePairImageEl.src = currentQuestion.tomareImage;
+    mapQuestionEl.innerHTML = "";
+  } else if (isImagePrefectureMode(quizMode)) {
     municipalityEl.textContent = "";
     questionImageEl.src = currentQuestion.image;
     questionImageEl.alt = quizMode === "diamond" ? "横断歩道ダイヤ" : "止まれ標示";
+    diamondPairImageEl.removeAttribute("src");
+    tomarePairImageEl.removeAttribute("src");
     mapQuestionEl.innerHTML = "";
   } else if (mapQuestionMode) {
     municipalityEl.textContent = isMapClickMode(quizMode) ? currentQuestion.name : "";
     questionImageEl.removeAttribute("src");
     questionImageEl.alt = "";
+    diamondPairImageEl.removeAttribute("src");
+    tomarePairImageEl.removeAttribute("src");
     renderMapQuestion(currentQuestion);
   } else {
     municipalityEl.textContent = currentQuestion.name;
     questionImageEl.removeAttribute("src");
     questionImageEl.alt = "";
+    diamondPairImageEl.removeAttribute("src");
+    tomarePairImageEl.removeAttribute("src");
     mapQuestionEl.innerHTML = "";
   }
 
@@ -1864,6 +1907,8 @@ function nextQuestion(options = {}) {
       ? "この横断歩道ダイヤが存在する都道府県は？"
     : quizMode === "tomare"
       ? "この「止まれ」標示が存在する都道府県は？"
+    : quizMode === "diamondTomare"
+      ? "両方の画像に共通する都道府県は？"
       : quizMode === "map"
         ? "赤色で示された市区町村は？"
       : quizMode === "municipalityMap"
@@ -1891,11 +1936,6 @@ function answer(selectedPrefecture, selectedButton) {
   if (locked || !currentQuestion) return;
   if (selectedCorrectPrefectures.includes(selectedPrefecture)) return;
   const correct = currentQuestion.prefectures.includes(selectedPrefecture);
-  const quizMode = currentQuizMode();
-  const correctText = quizMode === "map" || quizMode === "areaCode" || isUniversityMode(quizMode) || isLocalPlaceMapMode(quizMode)
-    ? formatAnswerListForFeedback(currentQuestion.prefectures)
-    : formatPrefectureList(currentQuestion.prefectures);
-  const questionNameText = formatRegionNameForFeedback(currentQuestion.name);
 
   if (correct) {
     selectedCorrectPrefectures.push(selectedPrefecture);
@@ -1908,11 +1948,43 @@ function answer(selectedPrefecture, selectedButton) {
       updateScoreboard();
       return;
     }
+  } else {
+    selectedButton.classList.add("wrong");
+  }
 
-    locked = true;
+  finishAnswer([...selectedCorrectPrefectures, ...(correct ? [] : [selectedPrefecture])], correct);
+}
+
+function submitVisibleAnswers() {
+  if (locked || !currentQuestion) return;
+  const visibleButtons = [...optionsEl.querySelectorAll(".pref-button")];
+  if (visibleButtons.length === 0) return;
+  const selectedAnswers = [...new Set([
+    ...selectedCorrectPrefectures,
+    ...visibleButtons.map((button) => button.textContent)
+  ])];
+  const correct = selectedAnswers.length === currentQuestion.prefectures.length &&
+    selectedAnswers.every((answer) => currentQuestion.prefectures.includes(answer));
+  visibleButtons.forEach((button) => {
+    button.classList.add(currentQuestion.prefectures.includes(button.textContent) ? "correct" : "wrong");
+  });
+  finishAnswer(selectedAnswers, correct);
+}
+
+function finishAnswer(selectedAnswers, correct) {
+  locked = true;
+  const quizMode = currentQuizMode();
+  const correctText = quizMode === "map" || quizMode === "areaCode" || isUniversityMode(quizMode) || isLocalPlaceMapMode(quizMode)
+    ? formatAnswerListForFeedback(currentQuestion.prefectures)
+    : formatPrefectureList(currentQuestion.prefectures);
+  const questionNameText = formatRegionNameForFeedback(currentQuestion.name);
+
+  if (correct) {
     score += 1;
     recordMapAnswerResult(quizMode, selectedPrefectures()[0], currentQuestion.codes, true);
-    feedbackEl.textContent = isImagePrefectureMode(quizMode)
+    feedbackEl.textContent = quizMode === "diamondTomare"
+      ? `正解です。両方に共通するのは${correctText}です。`
+      : isImagePrefectureMode(quizMode)
       ? `正解です。この${quizMode === "diamond" ? "ダイヤ" : "「止まれ」標示"}は${correctText}です。`
       : quizMode === "map"
         ? `正解です。赤色の場所は${correctText}です。`
@@ -1925,11 +1997,11 @@ function answer(selectedPrefecture, selectedButton) {
       : `正解です。${questionNameText}は${correctText}です。`;
     feedbackEl.className = "feedback correct";
   } else {
-    locked = true;
-    selectedButton.classList.add("wrong");
-    const wrongSelectedCodes = selectedMapCodesForAnswer(selectedPrefecture, quizMode);
+    const wrongSelectedCodes = [...new Set(selectedAnswers.flatMap((answer) => selectedMapCodesForAnswer(answer, quizMode)))];
     recordMapAnswerResult(quizMode, selectedPrefectures()[0], currentQuestion.codes, false);
-    feedbackEl.textContent = isImagePrefectureMode(quizMode)
+    feedbackEl.textContent = quizMode === "diamondTomare"
+      ? `残念！両方に共通するのは${correctText}でした。`
+      : isImagePrefectureMode(quizMode)
       ? `残念！この${quizMode === "diamond" ? "ダイヤ" : "「止まれ」標示"}は${correctText}でした。`
       : quizMode === "map"
         ? `残念！赤色の場所は${correctText}でした。`
@@ -1943,7 +2015,7 @@ function answer(selectedPrefecture, selectedButton) {
     feedbackEl.className = "feedback wrong";
     wrongAnswers.push({
       name: currentQuestion.name,
-      selected: selectedPrefecture,
+      selected: selectedAnswers.join("、"),
       correct: correctText,
       quizMode,
       selectedPrefectureName: selectedPrefectures()[0],
@@ -1952,6 +2024,7 @@ function answer(selectedPrefecture, selectedButton) {
         name: currentQuestion.name,
         prefectures: [...currentQuestion.prefectures],
         image: currentQuestion.image,
+        tomareImage: currentQuestion.tomareImage,
         codes: currentQuestion.codes,
         localPlaceMunicipalityCode: currentQuestion.localPlaceMunicipalityCode
       }
@@ -2189,6 +2262,7 @@ function showResult() {
       name: question.name,
       prefectures: [...question.prefectures],
       image: question.image,
+      tomareImage: question.tomareImage,
       codes: question.codes,
       localPlaceMunicipalityCode: question.localPlaceMunicipalityCode
     }))
@@ -2196,6 +2270,7 @@ function showResult() {
       name: wrong.question.name,
       prefectures: [...wrong.question.prefectures],
       image: wrong.question.image,
+      tomareImage: wrong.question.tomareImage,
       codes: wrong.question.codes,
       localPlaceMunicipalityCode: wrong.question.localPlaceMunicipalityCode
     }));
@@ -2217,11 +2292,25 @@ function showResult() {
     wrongAnswers.forEach((wrong) => {
       const item = document.createElement("li");
       if (wrong.question.image) {
-        const image = document.createElement("img");
-        image.className = "wrong-question-image";
-        image.src = wrong.question.image;
-        image.alt = wrong.quizMode === "tomare" ? "不正解だった止まれ標示" : "不正解だった横断歩道ダイヤ";
-        item.appendChild(image);
+        const images = wrong.question.tomareImage
+          ? [
+            { src: wrong.question.image, alt: "不正解だった横断歩道ダイヤ" },
+            { src: wrong.question.tomareImage, alt: "不正解だった止まれ標示" }
+          ]
+          : [{
+            src: wrong.question.image,
+            alt: wrong.quizMode === "tomare" ? "不正解だった止まれ標示" : "不正解だった横断歩道ダイヤ"
+          }];
+        const imageContainer = wrong.question.tomareImage ? document.createElement("div") : item;
+        if (wrong.question.tomareImage) imageContainer.className = "wrong-question-image-pair";
+        images.forEach(({ src, alt }) => {
+          const image = document.createElement("img");
+          image.className = "wrong-question-image";
+          image.src = src;
+          image.alt = alt;
+          imageContainer.appendChild(image);
+        });
+        if (imageContainer !== item) item.appendChild(imageContainer);
         appendWrongDetail(item, wrong);
       } else {
         appendWrongDetail(item, wrong);
@@ -2264,6 +2353,8 @@ answerFilterEl.addEventListener("keydown", (event) => {
     event.preventDefault();
   }
 });
+
+answerSubmitButtonEl.addEventListener("click", submitVisibleAnswers);
 
 quizModeRadios.forEach((radio) => {
   radio.addEventListener("change", () => {
