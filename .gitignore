@@ -1,0 +1,7 @@
+# Private quiz source files and generated packs must never be published.
+private-assets/
+*.prefquiz
+
+# Local editor/runtime files.
+__pycache__/
+*.pyc

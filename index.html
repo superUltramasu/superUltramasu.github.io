@@ -1,0 +1,167 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>自治体都道府県クイズ</title>
+    <link rel="stylesheet" href="./styles.css?v=group-selection-staging">
+  </head>
+  <body>
+    <main class="app-shell">
+      <section class="quiz-panel" aria-labelledby="app-title">
+        <header class="topbar">
+          <div>
+            <p class="eyebrow">Municipality Prefecture Quiz</p>
+            <h1 id="app-title">自治体都道府県クイズ</h1>
+          </div>
+          <div class="scoreboard" aria-label="スコア">
+            <div>
+              <span id="score">0</span>
+              <small>正解</small>
+            </div>
+            <div>
+              <span id="currentNo">0</span>
+              <small>問題</small>
+            </div>
+            <div>
+              <span id="totalNo">0</span>
+              <small>全体</small>
+            </div>
+          </div>
+        </header>
+
+        <section id="setupView" class="setup-view" aria-label="クイズ設定">
+          <div class="setup-grid">
+            <fieldset class="setting-group private-pack-panel">
+              <legend>プライベートクイズ</legend>
+              <div class="private-pack-row">
+                <div>
+                  <p id="privatePackStatus" class="private-pack-status" aria-live="polite">
+                    <span class="mode-badge">一般ユーザー</span>
+                    公開クイズのみ利用できます。
+                  </p>
+                  <p class="private-pack-note">パックはこの端末のブラウザ内だけに保存され、サーバーへ送信されません。</p>
+                </div>
+                <div class="private-pack-actions">
+                  <label class="primary-button file-button" for="privatePackInput">パックを読み込む</label>
+                  <input id="privatePackInput" class="visually-hidden" type="file" accept=".prefquiz,application/json">
+                  <button id="removePrivatePackButton" class="secondary-button hidden" type="button">端末から削除</button>
+                </div>
+              </div>
+              <p id="privatePackMessage" class="private-pack-message" aria-live="polite"></p>
+            </fieldset>
+
+            <fieldset class="setting-group">
+              <legend>クイズ</legend>
+              <div class="type-grid">
+                <label><input type="radio" name="quizMode" value="municipality" checked> 自治体 → 都道府県</label>
+                <label><input type="radio" name="quizMode" value="areaCode"> 市外局番 → 地域</label>
+                <label><input type="radio" name="quizMode" value="areaCodePrefecture"> 市外局番 → 都道府県</label>
+                <label><input type="radio" name="quizMode" value="map"> 地図 → 市区町村</label>
+                <label><input type="radio" name="quizMode" value="municipalityMap"> 市区町村 → 地図</label>
+                <label><input type="radio" name="quizMode" value="mapAreaCode"> 地図 → 市外局番</label>
+                <label><input type="radio" name="quizMode" value="areaCodeMap"> 市外局番 → 地図</label>
+                <label><input type="radio" name="quizMode" value="localPlaceMap"> 地図 → 町丁目</label>
+                <label><input type="radio" name="quizMode" value="localPlaceMapClick"> 町丁目 → 地図</label>
+                <label><input type="radio" name="quizMode" value="nationalUniversity"> 国立大学 → 所在地</label>
+                <label><input type="radio" name="quizMode" value="publicUniversity"> 公立大学 → 所在地</label>
+                <label><input type="radio" name="quizMode" value="privateUniversity"> 私立大学 → 所在地</label>
+              </div>
+              <div id="privateQuizOptions" class="private-quiz-options hidden" aria-label="プライベートクイズ"></div>
+            </fieldset>
+
+            <fieldset class="setting-group">
+              <legend id="regionLegend">地方</legend>
+              <div id="regionOptions" class="choice-grid region-grid"></div>
+            </fieldset>
+
+            <fieldset id="municipalityTypeGroup" class="setting-group">
+              <legend>市区町村</legend>
+              <div class="type-grid">
+                <label><input type="checkbox" name="municipalityType" value="市" checked> 市</label>
+                <label><input type="checkbox" name="municipalityType" value="区"> 区</label>
+                <label><input type="checkbox" name="municipalityType" value="町"> 町</label>
+                <label><input type="checkbox" name="municipalityType" value="村"> 村</label>
+              </div>
+            </fieldset>
+
+            <fieldset class="setting-group">
+              <legend>問題数</legend>
+              <div class="question-count-row">
+                <select id="questionCount" aria-label="問題数"></select>
+                <span id="availableCount" class="available-count"></span>
+              </div>
+              <p id="setupMessage" class="setup-message" aria-live="polite"></p>
+            </fieldset>
+          </div>
+
+          <div class="setup-actions">
+            <button id="startButton" class="primary-button" type="button">クイズを始める</button>
+          </div>
+        </section>
+
+        <section id="quizView" class="quiz-view hidden" aria-label="クイズ">
+          <div class="question-area">
+            <div class="question-copy">
+              <p id="quizPrompt" class="prompt">この自治体がある都道府県は？</p>
+              <div id="municipality" class="municipality" aria-live="polite">読み込み中</div>
+              <img id="questionImage" class="question-image hidden" src="" alt="">
+              <div id="questionImagePair" class="question-image-pair hidden" aria-label="2つの問題画像">
+                <img id="diamondPairImage" class="question-image" src="" alt="左の問題画像">
+                <img id="tomarePairImage" class="question-image" src="" alt="右の問題画像">
+              </div>
+              <div id="mapQuestion" class="map-question hidden" aria-label="地図問題"></div>
+              <p id="feedback" class="feedback" aria-live="polite"></p>
+            </div>
+          </div>
+
+          <section class="options-wrap" aria-label="都道府県の選択肢">
+            <div class="answer-search">
+              <textarea id="answerFilter" class="answer-filter" rows="1" aria-label="選択肢を絞り込む" placeholder="romaji / number"></textarea>
+              <button id="answerSubmitButton" class="primary-button answer-submit-button" type="button" disabled>回答</button>
+            </div>
+            <div id="options" class="options-grid"></div>
+          </section>
+        </section>
+
+        <section class="controls" aria-label="クイズ操作">
+          <button id="backToSetupButton" class="secondary-button" type="button">設定に戻る</button>
+        </section>
+
+        <section id="resultView" class="result-view hidden" aria-label="結果">
+          <div class="result-summary">
+            <p class="prompt">結果</p>
+            <div id="resultRate" class="result-rate">0%</div>
+            <p id="resultScore" class="result-score">0問中0問正解</p>
+          </div>
+
+          <section class="wrong-section" aria-labelledby="wrongTitle">
+            <div id="resultMapSummary" class="result-map-summary hidden" aria-label="不正解位置の地図"></div>
+            <h2 id="wrongTitle">不正解の問題</h2>
+            <ul id="wrongList" class="wrong-list"></ul>
+          </section>
+
+          <div class="setup-actions">
+            <button id="retryButton" class="primary-button" type="button">同じ条件でもう一度</button>
+            <button id="reviewButton" class="secondary-button" type="button">復習する</button>
+            <button id="resultSetupButton" class="secondary-button" type="button">設定に戻る</button>
+          </div>
+        </section>
+      </section>
+    </main>
+
+    <script src="./municipality-data.js"></script>
+    <script src="./area-code-data.js"></script>
+    <script src="./map-quiz-data.js"></script>
+    <script src="./area-code-map-data.js"></script>
+    <script src="./prefecture-map-overrides.js"></script>
+    <script src="./lake-data.js"></script>
+    <script src="./reference-map-data.js"></script>
+    <script src="./local-place-map-data.js"></script>
+    <script src="./national-university-data.js"></script>
+    <script src="./public-university-data.js"></script>
+    <script src="./private-university-data.js"></script>
+    <script src="./municipality-readings.js"></script>
+    <script src="./app.js?v=group-selection-staging"></script>
+  </body>
+</html>
