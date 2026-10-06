@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>自治体都道府県クイズ</title>
-    <link rel="stylesheet" href="./styles.css?v=group-selection-staging">
+    <link rel="stylesheet" href="./styles.css?v=shinkansen-quiz">
   </head>
   <body>
     <main class="app-shell">
@@ -66,6 +66,7 @@
                 <label><input type="radio" name="quizMode" value="nationalUniversity"> 国立大学 → 所在地</label>
                 <label><input type="radio" name="quizMode" value="publicUniversity"> 公立大学 → 所在地</label>
                 <label><input type="radio" name="quizMode" value="privateUniversity"> 私立大学 → 所在地</label>
+                <label><input type="radio" name="quizMode" value="shinkansenStations"> 新幹線 → 駅名</label>
               </div>
               <div id="privateQuizOptions" class="private-quiz-options hidden" aria-label="プライベートクイズ"></div>
             </fieldset>
@@ -85,7 +86,15 @@
               </div>
             </fieldset>
 
-            <fieldset class="setting-group">
+            <fieldset id="shinkansenDirectionGroup" class="setting-group hidden">
+              <legend>方向</legend>
+              <div class="type-grid shinkansen-direction-options">
+                <label><input type="radio" name="shinkansenDirection" value="down" checked> 下り</label>
+                <label><input type="radio" name="shinkansenDirection" value="up"> 上り</label>
+              </div>
+            </fieldset>
+
+            <fieldset id="questionCountGroup" class="setting-group">
               <legend>問題数</legend>
               <div class="question-count-row">
                 <select id="questionCount" aria-label="問題数"></select>
@@ -101,7 +110,7 @@
         </section>
 
         <section id="quizView" class="quiz-view hidden" aria-label="クイズ">
-          <div class="question-area">
+          <div id="standardQuestionArea" class="question-area">
             <div class="question-copy">
               <p id="quizPrompt" class="prompt">この自治体がある都道府県は？</p>
               <div id="municipality" class="municipality" aria-live="polite">読み込み中</div>
@@ -115,12 +124,28 @@
             </div>
           </div>
 
-          <section class="options-wrap" aria-label="都道府県の選択肢">
+          <section id="standardOptionsWrap" class="options-wrap" aria-label="都道府県の選択肢">
             <div class="answer-search">
               <textarea id="answerFilter" class="answer-filter" rows="1" aria-label="選択肢を絞り込む" placeholder="romaji / number"></textarea>
               <button id="answerSubmitButton" class="primary-button answer-submit-button" type="button" disabled>回答</button>
             </div>
             <div id="options" class="options-grid"></div>
+          </section>
+
+          <section id="shinkansenQuiz" class="shinkansen-quiz hidden" aria-labelledby="shinkansenQuizTitle">
+            <div class="shinkansen-heading">
+              <div>
+                <p class="prompt">順番に駅名を入力してください</p>
+                <h2 id="shinkansenQuizTitle"></h2>
+              </div>
+              <span id="shinkansenDirectionLabel" class="direction-badge"></span>
+            </div>
+            <div id="shinkansenBoard" class="shinkansen-board"></div>
+            <p id="shinkansenFeedback" class="feedback" aria-live="polite"></p>
+            <div class="shinkansen-actions">
+              <button id="shinkansenSubmitButton" class="primary-button" type="button">回答完了</button>
+              <button id="shinkansenRetryButton" class="secondary-button hidden" type="button">もう一度</button>
+            </div>
           </section>
         </section>
 
@@ -151,6 +176,7 @@
     </main>
 
     <script src="./municipality-data.js"></script>
+    <script src="./shinkansen-data.js"></script>
     <script src="./area-code-data.js"></script>
     <script src="./map-quiz-data.js"></script>
     <script src="./area-code-map-data.js"></script>
@@ -162,6 +188,6 @@
     <script src="./public-university-data.js"></script>
     <script src="./private-university-data.js"></script>
     <script src="./municipality-readings.js"></script>
-    <script src="./app.js?v=group-selection-staging"></script>
+    <script src="./app.js?v=shinkansen-quiz"></script>
   </body>
 </html>

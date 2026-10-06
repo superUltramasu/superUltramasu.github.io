@@ -25,6 +25,15 @@
 
 参照元: https://www.mext.go.jp/a_menu/koutou/ichiran/mext_00038.html
 
+## 新幹線駅データについて
+
+新幹線駅名クイズの駅順は「新幹線の駅名一覧」を基礎に、JR各社の駅・路線案内で確認して作成しています。クイズを上り・下りの一直線の駅順として扱うため、支線のガーラ湯沢駅と博多南駅は出題対象に含めていません。
+
+参照元: https://1ran.hikak.com/shinkansen1/
+JR東日本: https://timetables.jreast.co.jp/index.html
+JR東海: https://railway.jr-central.co.jp/station-guide/
+JR九州: https://www.jrkyushu.co.jp/railway/station/index.html
+
 ## 地図データについて
 
 地図クイズでは、`map-quiz-data.js` 内で jpn-atlas の日本市区町村境界 TopoJSON と、ウェザーニューズの市区町村コード一覧を使用しています。

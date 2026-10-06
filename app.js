@@ -146,18 +146,30 @@ const mapLakeOverlays = [
 const regionOptionsEl = document.querySelector("#regionOptions");
 const regionLegendEl = document.querySelector("#regionLegend");
 const quizModeRadios = [...document.querySelectorAll('input[name="quizMode"]')];
+const shinkansenDirectionRadios = [...document.querySelectorAll('input[name="shinkansenDirection"]')];
 const privateQuizOptionsEl = document.querySelector("#privateQuizOptions");
 const privatePackInputEl = document.querySelector("#privatePackInput");
 const privatePackStatusEl = document.querySelector("#privatePackStatus");
 const privatePackMessageEl = document.querySelector("#privatePackMessage");
 const removePrivatePackButtonEl = document.querySelector("#removePrivatePackButton");
 const municipalityTypeGroupEl = document.querySelector("#municipalityTypeGroup");
+const shinkansenDirectionGroupEl = document.querySelector("#shinkansenDirectionGroup");
+const questionCountGroupEl = document.querySelector("#questionCountGroup");
 const typeCheckboxes = [...document.querySelectorAll('input[name="municipalityType"]')];
 const questionCountEl = document.querySelector("#questionCount");
 const availableCountEl = document.querySelector("#availableCount");
 const setupMessageEl = document.querySelector("#setupMessage");
 const setupViewEl = document.querySelector("#setupView");
 const quizViewEl = document.querySelector("#quizView");
+const standardQuestionAreaEl = document.querySelector("#standardQuestionArea");
+const standardOptionsWrapEl = document.querySelector("#standardOptionsWrap");
+const shinkansenQuizEl = document.querySelector("#shinkansenQuiz");
+const shinkansenQuizTitleEl = document.querySelector("#shinkansenQuizTitle");
+const shinkansenDirectionLabelEl = document.querySelector("#shinkansenDirectionLabel");
+const shinkansenBoardEl = document.querySelector("#shinkansenBoard");
+const shinkansenFeedbackEl = document.querySelector("#shinkansenFeedback");
+const shinkansenSubmitButtonEl = document.querySelector("#shinkansenSubmitButton");
+const shinkansenRetryButtonEl = document.querySelector("#shinkansenRetryButton");
 const resultViewEl = document.querySelector("#resultView");
 const startButton = document.querySelector("#startButton");
 const backToSetupButton = document.querySelector("#backToSetupButton");
@@ -195,6 +207,9 @@ let mapAnswerResults = [];
 let selectedCorrectPrefectures = [];
 let pendingPrefectureSelections = [];
 let groupedSelectionMode = false;
+let activeShinkansenStations = [];
+let shinkansenCompleted = false;
+let shinkansenBoardColumns = 0;
 let reviewMode = false;
 let resultReviewQuestions = [];
 let localPlaceSettingsPrefecture = null;
@@ -209,6 +224,30 @@ const activePrivatePackKey = "active";
 
 function currentQuizMode() {
   return document.querySelector('input[name="quizMode"]:checked')?.value ?? "municipality";
+}
+
+function isShinkansenMode(mode = currentQuizMode()) {
+  return mode === "shinkansenStations";
+}
+
+function getShinkansenData() {
+  return window.shinkansenData && typeof window.shinkansenData === "object"
+    ? window.shinkansenData
+    : {};
+}
+
+function selectedShinkansenDirection() {
+  return document.querySelector('input[name="shinkansenDirection"]:checked')?.value ?? "down";
+}
+
+function selectedShinkansenRoute() {
+  return isShinkansenMode() ? selectedRegionNames()[0] ?? "" : "";
+}
+
+function shinkansenStationsForSettings() {
+  const stations = getShinkansenData()[selectedShinkansenRoute()] ?? [];
+  const normalized = stations.map(([name, reading]) => ({ name, reading }));
+  return selectedShinkansenDirection() === "up" ? normalized.reverse() : normalized;
 }
 
 function isPrivateQuizMode(mode = currentQuizMode()) {
@@ -853,6 +892,21 @@ function getMunicipalityReadingEntries() {
 function renderRegionOptions() {
   regionOptionsEl.innerHTML = "";
   regionOptionsEl.classList.remove("local-place-region", "local-place-prefectures", "local-place-drilldown");
+  if (isShinkansenMode()) {
+    regionLegendEl.textContent = "路線";
+    Object.keys(getShinkansenData()).forEach((routeName, index) => {
+      const label = document.createElement("label");
+      const input = document.createElement("input");
+      input.type = "radio";
+      input.name = "region";
+      input.value = routeName;
+      input.checked = index === 0;
+      input.addEventListener("change", updateQuestionCountOptions);
+      label.append(input, document.createTextNode(routeName));
+      regionOptionsEl.appendChild(label);
+    });
+    return;
+  }
   if (isLocalPlaceMapMode()) {
     renderLocalPlaceRegionOptions();
     return;
@@ -1889,9 +1943,12 @@ function updateQuestionCountOptions() {
   const municipalityMode = quizMode === "municipality" || quizMode === "map" || quizMode === "municipalityMap";
   const localPlaceMode = isLocalPlaceMapMode(quizMode);
   const universityMode = isUniversityMode(quizMode);
+  const shinkansenMode = isShinkansenMode(quizMode);
   const privateQuiz = currentPrivateQuiz(quizMode);
   const universityLabel = universityCategoryLabel(quizMode);
-  const rawCount = localPlaceMode ? selectedLocalPlaceQuestionCount() : availableQuestions().length;
+  const rawCount = shinkansenMode
+    ? shinkansenStationsForSettings().length
+    : localPlaceMode ? selectedLocalPlaceQuestionCount() : availableQuestions().length;
   const provisionalLocalPlaceCount = localPlaceMode && rawCount == null && selectedLocalPlaceMunicipalityMetadata();
   const count = provisionalLocalPlaceCount ? 100 : rawCount;
   const choices = questionCountChoices(count);
@@ -1912,6 +1969,8 @@ function updateQuestionCountOptions() {
 
   availableCountEl.textContent = provisionalLocalPlaceCount ? "出題可能: 読み込み後に確定" : `出題可能: ${count}問`;
   municipalityTypeGroupEl.classList.toggle("hidden", !municipalityMode);
+  shinkansenDirectionGroupEl.classList.toggle("hidden", !shinkansenMode);
+  questionCountGroupEl.classList.toggle("hidden", shinkansenMode);
   const canStart = regionCount > 0 && (!municipalityMode || typeCount > 0) && count > 0;
   startButton.disabled = !canStart;
   questionCountEl.disabled = !canStart;
@@ -1931,7 +1990,9 @@ function updateQuestionCountOptions() {
       ? `選択条件に合う${universityLabel}がありません。条件を変更してください。`
       : "選択条件に合う自治体がありません。条件を変更してください。";
   } else {
-    setupMessageEl.textContent = privateQuiz
+    setupMessageEl.textContent = shinkansenMode
+      ? `${selectedShinkansenRoute()}の駅名を${selectedShinkansenDirection() === "down" ? "下り" : "上り"}順で回答します。`
+      : privateQuiz
       ? `プライベートクイズ「${privateQuiz.title}」の条件を選んで開始してください。`
       : areaCodeMode
       ? "市外局番クイズの条件を選んで開始してください。"
@@ -2449,6 +2510,178 @@ function finishAnswer(selectedAnswers, correct) {
   nextQuestion({ keepFeedback: true });
 }
 
+function normalizedStationAnswer(value) {
+  return String(value ?? "")
+    .normalize("NFKC")
+    .trim()
+    .replace(/[\s　]+/g, "")
+    .replace(/駅$/, "")
+    .replace(/[ァ-ヶ]/g, (character) => String.fromCharCode(character.charCodeAt(0) - 0x60))
+    .toLowerCase();
+}
+
+function stationAnswerIsCorrect(value, station) {
+  const normalized = normalizedStationAnswer(value);
+  return normalized.length > 0 && [station.name, station.reading]
+    .some((answer) => normalizedStationAnswer(answer) === normalized);
+}
+
+function shinkansenColumnCount() {
+  return window.matchMedia("(max-width: 700px)").matches ? 2 : 4;
+}
+
+function updateShinkansenProgress() {
+  if (shinkansenCompleted) return;
+  const filled = [...shinkansenBoardEl.querySelectorAll(".station-input")]
+    .filter((input) => normalizedStationAnswer(input.value).length > 0)
+    .length;
+  scoreEl.textContent = "0";
+  currentNoEl.textContent = String(filled);
+  totalNoEl.textContent = String(activeShinkansenStations.length);
+}
+
+function createFlowArrow(direction, gridColumn) {
+  const arrow = document.createElement("div");
+  arrow.className = `station-flow-arrow ${direction}`;
+  arrow.style.gridColumn = String(gridColumn);
+  arrow.style.gridRow = "1";
+  arrow.setAttribute("aria-hidden", "true");
+  return arrow;
+}
+
+function renderShinkansenBoard() {
+  const previousValues = new Map(
+    [...shinkansenBoardEl.querySelectorAll(".station-input")]
+      .map((input) => [Number(input.dataset.stationIndex), input.value])
+  );
+  const columns = shinkansenColumnCount();
+  shinkansenBoardColumns = columns;
+  shinkansenBoardEl.innerHTML = "";
+
+  for (let rowStart = 0, rowIndex = 0; rowStart < activeShinkansenStations.length; rowStart += columns, rowIndex += 1) {
+    const rowStations = activeShinkansenStations.slice(rowStart, rowStart + columns);
+    const reverse = rowIndex % 2 === 1;
+    const row = document.createElement("div");
+    row.className = `shinkansen-row${reverse ? " reverse" : ""}`;
+    row.style.gridTemplateColumns = Array.from({ length: columns }, (_, index) => (
+      index < columns - 1 ? "minmax(0, 1fr) 42px" : "minmax(0, 1fr)"
+    )).join(" ");
+
+    rowStations.forEach((station, offset) => {
+      const stationIndex = rowStart + offset;
+      const visualColumn = reverse ? columns - offset : offset + 1;
+      const card = document.createElement("div");
+      card.className = "station-answer-card";
+      card.style.gridColumn = String(visualColumn * 2 - 1);
+      card.style.gridRow = "1";
+      card.dataset.stationIndex = String(stationIndex);
+
+      const input = document.createElement("input");
+      input.type = "text";
+      input.className = "station-input";
+      input.dataset.stationIndex = String(stationIndex);
+      input.value = previousValues.get(stationIndex) ?? "";
+      input.placeholder = "駅名";
+      input.autocomplete = "off";
+      input.spellcheck = false;
+      input.setAttribute("aria-label", `${stationIndex + 1}番目の駅名`);
+      input.addEventListener("input", updateShinkansenProgress);
+      input.addEventListener("keydown", (event) => {
+        if (event.key !== "Enter") return;
+        event.preventDefault();
+        shinkansenBoardEl.querySelector(`.station-input[data-station-index="${stationIndex + 1}"]`)?.focus();
+      });
+      card.appendChild(input);
+      row.appendChild(card);
+
+      if (offset < rowStations.length - 1) {
+        const nextVisualColumn = reverse ? visualColumn - 1 : visualColumn + 1;
+        row.appendChild(createFlowArrow(reverse ? "left" : "right", Math.min(visualColumn, nextVisualColumn) * 2));
+      }
+    });
+
+    if (rowStart + rowStations.length < activeShinkansenStations.length) {
+      const turn = document.createElement("div");
+      turn.className = `station-row-turn ${reverse ? "left" : "right"}`;
+      const finalOffset = rowStations.length - 1;
+      const finalVisualColumn = reverse ? columns - finalOffset : finalOffset + 1;
+      turn.style.gridColumn = String(finalVisualColumn * 2 - 1);
+      turn.setAttribute("aria-hidden", "true");
+      row.appendChild(turn);
+      row.classList.add("has-turn");
+    }
+
+    shinkansenBoardEl.appendChild(row);
+  }
+  updateShinkansenProgress();
+}
+
+function startShinkansenQuiz() {
+  activeShinkansenStations = shinkansenStationsForSettings();
+  shinkansenCompleted = false;
+  score = 0;
+  answered = 0;
+  currentQuestion = null;
+  questionPool = [];
+  standardQuestionAreaEl.classList.add("hidden");
+  standardOptionsWrapEl.classList.add("hidden");
+  shinkansenQuizEl.classList.remove("hidden");
+  shinkansenQuizTitleEl.textContent = `${selectedShinkansenRoute()} 駅名クイズ`;
+  shinkansenDirectionLabelEl.textContent = selectedShinkansenDirection() === "down" ? "下り" : "上り";
+  shinkansenFeedbackEl.textContent = "";
+  shinkansenFeedbackEl.className = "feedback";
+  shinkansenSubmitButtonEl.classList.remove("hidden");
+  shinkansenRetryButtonEl.classList.add("hidden");
+  shinkansenBoardEl.innerHTML = "";
+  renderShinkansenBoard();
+  showView("quiz");
+  shinkansenBoardEl.querySelector(".station-input")?.focus();
+}
+
+function submitShinkansenAnswers() {
+  if (shinkansenCompleted || activeShinkansenStations.length === 0) return;
+  shinkansenCompleted = true;
+  let correctCount = 0;
+
+  activeShinkansenStations.forEach((station, stationIndex) => {
+    const card = shinkansenBoardEl.querySelector(`.station-answer-card[data-station-index="${stationIndex}"]`);
+    const input = card?.querySelector(".station-input");
+    if (!card || !input) return;
+    const entered = input.value.trim();
+    const correct = stationAnswerIsCorrect(entered, station);
+    card.classList.add(correct ? "correct" : "wrong");
+    input.disabled = true;
+
+    if (correct) {
+      correctCount += 1;
+      input.value = station.name;
+      return;
+    }
+
+    if (!entered) input.classList.add("unanswered");
+    const answer = document.createElement("strong");
+    answer.className = "station-correct-answer";
+    answer.textContent = station.name;
+    card.appendChild(answer);
+  });
+
+  score = correctCount;
+  answered = activeShinkansenStations.length;
+  scoreEl.textContent = String(correctCount);
+  currentNoEl.textContent = String(activeShinkansenStations.length);
+  totalNoEl.textContent = String(activeShinkansenStations.length);
+  shinkansenFeedbackEl.textContent = `${activeShinkansenStations.length}駅中${correctCount}駅正解です。`;
+  shinkansenFeedbackEl.className = `feedback ${correctCount === activeShinkansenStations.length ? "correct" : "wrong"}`;
+  shinkansenSubmitButtonEl.classList.add("hidden");
+  shinkansenRetryButtonEl.classList.remove("hidden");
+}
+
+function showStandardQuizLayout() {
+  standardQuestionAreaEl.classList.remove("hidden");
+  standardOptionsWrapEl.classList.remove("hidden");
+  shinkansenQuizEl.classList.add("hidden");
+}
+
 function startQuestionSet(questions, options = {}) {
   const { isReview = false } = options;
   questionPool = questions;
@@ -2462,6 +2695,7 @@ function startQuestionSet(questions, options = {}) {
   reviewMode = isReview;
   resultReviewQuestions = [];
   currentQuestion = null;
+  showStandardQuizLayout();
   renderOptions();
   showView("quiz");
   nextQuestion();
@@ -2476,6 +2710,11 @@ async function startQuiz() {
     : setupMessageEl.textContent;
 
   try {
+    if (isShinkansenMode()) {
+      startShinkansenQuiz();
+      started = true;
+      return;
+    }
     if (isLocalPlaceMapMode()) {
       await ensureSelectedLocalPlaceDataLoaded();
     }
@@ -2736,6 +2975,7 @@ function showResult() {
 
 function backToSetup() {
   showView("setup");
+  showStandardQuizLayout();
   currentQuestion = null;
   questionPool = [];
   optionPrefectures = [];
@@ -2746,6 +2986,8 @@ function backToSetup() {
   selectedCorrectPrefectures = [];
   pendingPrefectureSelections = [];
   groupedSelectionMode = false;
+  activeShinkansenStations = [];
+  shinkansenCompleted = false;
   reviewMode = false;
   resultReviewQuestions = [];
   updateScoreboard();
@@ -2754,6 +2996,10 @@ function backToSetup() {
 
 typeCheckboxes.forEach((checkbox) => {
   checkbox.addEventListener("change", updateQuestionCountOptions);
+});
+
+shinkansenDirectionRadios.forEach((radio) => {
+  radio.addEventListener("change", updateQuestionCountOptions);
 });
 
 answerFilterEl.addEventListener("input", () => {
@@ -2768,6 +3014,13 @@ answerFilterEl.addEventListener("keydown", (event) => {
 });
 
 answerSubmitButtonEl.addEventListener("click", submitVisibleAnswers);
+shinkansenSubmitButtonEl.addEventListener("click", submitShinkansenAnswers);
+shinkansenRetryButtonEl.addEventListener("click", startShinkansenQuiz);
+
+window.addEventListener("resize", () => {
+  if (!isShinkansenMode() || shinkansenCompleted || shinkansenQuizEl.classList.contains("hidden")) return;
+  if (shinkansenColumnCount() !== shinkansenBoardColumns) renderShinkansenBoard();
+});
 
 quizModeRadios.forEach((radio) => {
   radio.addEventListener("change", privateQuizModeChanged);
