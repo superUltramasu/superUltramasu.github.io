@@ -1,0 +1,35 @@
+# 自治体・地域クイズ
+
+## 市外局番データについて
+
+地図から市外局番を当てるクイズの市外局番データは、総務省「市外局番の一覧（令和8年3月1日現在）」PDFを参照して作成しています。
+
+参照元: https://www.soumu.go.jp/main_content/001072440.pdf
+
+## 市区町村の読みについて
+
+正誤メッセージで表示する市区町村の読みは、e-Stat 統計ダッシュボード API の地域情報を参照して作成しています。
+
+参照元: https://dashboard.e-stat.go.jp/api/1.0/Json/getRegionInfo
+
+## 国立大学データについて
+
+国立大学名クイズの大学名と所在地は、文部科学省の「令和6年度全国大学一覧」に含まれる「01国立大学一覧」を参照して作成しています。東京医科歯科大学と東京工業大学は令和6年10月1日に東京科学大学へ統合されたため、クイズでは東京科学大学として扱っています。
+
+参照元: https://www.mext.go.jp/a_menu/koutou/ichiran/mext_00038.html
+東京科学大学: https://www.isct.ac.jp/ja/news/aoldn2aafk3r
+
+## 公立大学・私立大学データについて
+
+公立大学名クイズと私立大学名クイズの大学名と所在地は、文部科学省の「令和6年度全国大学一覧」に含まれる「02公立大学一覧」と「03-1～03-8私立大学一覧」を参照して作成しています。
+
+参照元: https://www.mext.go.jp/a_menu/koutou/ichiran/mext_00038.html
+
+## 新幹線駅データについて
+
+新幹線駅名クイズの駅順は「新幹線の駅名一覧」を基礎に、JR各社の駅・路線案内で確認して作成しています。クイズを上り・下りの一直線の駅順として扱うため、支線のガーラ湯沢駅と博多南駅は出題対象に含めていません。
+
+参照元: https://1ran.hikak.com/shinkansen1/
+JR東日本: https://timetables.jreast.co.jp/index.html
+JR東海: https://railway.jr-central.co.jp/station-guide/
+JR九州: https://www.jrkyushu.co.jp/railway/station/index.html
