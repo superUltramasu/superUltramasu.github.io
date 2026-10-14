@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>自治体都道府県クイズ</title>
-    <link rel="stylesheet" href="./styles.css?v=road-quiz">
+    <link rel="stylesheet" href="./styles.css?v=free-map-selection">
   </head>
   <body>
     <main class="app-shell">
@@ -156,12 +156,12 @@
           <section id="roadQuiz" class="road-quiz hidden" aria-labelledby="roadQuizTitle">
             <div class="road-quiz-heading">
               <div>
-                <p id="roadQuizPrompt" class="prompt">赤色で示された道路は何号線ですか？</p>
+                <p id="roadQuizPrompt" class="prompt">地図から道路を1本選び、その路線番号を回答してください</p>
                 <h2 id="roadQuizTitle"></h2>
               </div>
               <div class="road-map-legend" aria-label="道路の凡例">
                 <span><b id="roadBaseLegendLine" class="road-legend-line national"></b><span id="roadBaseLegendText">国道</span></span>
-                <span><b class="road-legend-line highlighted"></b>出題中</span>
+                <span><b class="road-legend-line selected"></b>選択中</span>
               </div>
             </div>
             <div id="roadMap" class="road-map" aria-label="道路クイズの地図"></div>
@@ -217,6 +217,6 @@
     <script src="./public-university-data.js"></script>
     <script src="./private-university-data.js"></script>
     <script src="./municipality-readings.js"></script>
-    <script src="./app.js?v=prefectural-road-pack"></script>
+    <script src="./app.js?v=free-map-selection"></script>
   </body>
 </html>

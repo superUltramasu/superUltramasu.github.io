@@ -515,6 +515,15 @@ select {
   fill: #1c36f2;
 }
 
+.map-click-completed {
+  fill: #d9dfdc;
+  cursor: default;
+}
+
+.map-click-unavailable {
+  cursor: default;
+}
+
 .map-result-correct {
   fill: #a7e957;
   stroke: #123a1c;
@@ -963,6 +972,10 @@ select {
   border-color: #df2f26;
 }
 
+.road-legend-line.selected {
+  border-color: #1c36f2;
+}
+
 .road-legend-line.prefectural {
   border-top-width: 2px;
 }
@@ -1010,6 +1023,7 @@ select {
   stroke-linecap: round;
   stroke-linejoin: round;
   stroke-width: 4;
+  pointer-events: none;
 }
 
 .road-line.prefectural {
@@ -1018,6 +1032,25 @@ select {
 
 .road-line.highlighted {
   stroke: #df2f26;
+}
+
+.road-line.selected {
+  stroke: #1c36f2;
+}
+
+.road-line-hit {
+  fill: none;
+  stroke: transparent;
+  stroke-width: 16px;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  cursor: pointer;
+  pointer-events: stroke;
+}
+
+.road-line-hit:focus {
+  stroke: rgb(28 54 242 / 18%);
+  outline: none;
 }
 
 .road-answer-form {

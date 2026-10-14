@@ -224,6 +224,13 @@ let shinkansenCompleted = false;
 let shinkansenBoardColumns = 0;
 let activeRoadData = null;
 const roadDataCache = new Map();
+let selfSelectedMapQuestion = false;
+let selfSelectedMapCodes = new Set();
+let completedSelfSelectedTargetIds = new Set();
+let completedSelfSelectedMapCodes = new Set();
+let roadSelectionReady = false;
+let selectableRoadRoutes = [];
+let completedRoadRouteIds = new Set();
 let reviewMode = false;
 let resultReviewQuestions = [];
 let localPlaceSettingsPrefecture = null;
@@ -471,7 +478,7 @@ function validatePrivateQuizPack(rawPack) {
         type,
         roadType,
         title,
-        prompt: String(quiz.prompt ?? `赤色で示された${roadLabel}は何号線ですか？`).trim(),
+        prompt: String(quiz.prompt ?? `地図から${roadLabel}を1本選び、その路線番号を回答してください`).trim(),
         prefectures: roadPrefectures
       };
     }
@@ -934,6 +941,16 @@ function isAreaCodeMapMode(quizMode = currentQuizMode()) {
   return quizMode === "mapAreaCode" || quizMode === "areaCodeMap";
 }
 
+function isSelfSelectedMapAnswerMode(quizMode = currentQuizMode()) {
+  return quizMode === "map" || quizMode === "mapAreaCode" || quizMode === "localPlaceMap";
+}
+
+function selfSelectedTargetId(question) {
+  if (!question) return "";
+  if (currentQuizMode() === "localPlaceMap") return `place:${question.name}`;
+  return `map:${question.codes?.[0] ?? ""}`;
+}
+
 function normalizedMapMunicipalityName(name) {
   return name
     .replace(/（[^）]+）/g, "")
@@ -1362,6 +1379,31 @@ function matchingLocalPlaces() {
   return municipality?.places ? aggregateLocalPlaces(municipality.places) : [];
 }
 
+function selfSelectableMapTargetCount(quizMode = currentQuizMode()) {
+  if (quizMode === "map") return matchingMapMunicipalities().length;
+  if (quizMode === "mapAreaCode") {
+    return new Set(matchingMapAreaCodes().flatMap((question) => question.codes)).size;
+  }
+  if (quizMode === "localPlaceMap") {
+    const loadedPlaces = matchingLocalPlaces();
+    return loadedPlaces.length > 0 ? loadedPlaces.length : selectedLocalPlaceQuestionCount();
+  }
+  return 0;
+}
+
+function selfSelectableMapCodes(quizMode = currentQuizMode()) {
+  if (quizMode === "map") {
+    return new Set(matchingMapMunicipalities().map((item) => item.code));
+  }
+  if (quizMode === "mapAreaCode") {
+    return new Set(matchingMapAreaCodes().flatMap((question) => question.codes));
+  }
+  if (quizMode === "localPlaceMap") {
+    return new Set(matchingLocalPlaces().flatMap((item) => item.codes ?? [item.code]));
+  }
+  return new Set();
+}
+
 function decodedArc(topology, arcIndex) {
   const reverse = arcIndex < 0;
   const arc = topology.arcs[reverse ? ~arcIndex : arcIndex];
@@ -1495,6 +1537,8 @@ function sectionMapItems(mapItems, selectedPref) {
 function mapPathClass(code, targetCodes, selectedCodes, resultMode, options = {}) {
   if (options.clickable) {
     if (selectedCodes.has(code)) return "map-click-selected";
+    if (options.selectableCodes && !options.selectableCodes.has(code)) return "map-area map-click-unavailable";
+    if (options.disabledCodes?.has(code)) return "map-area map-click-completed";
     return "map-area map-clickable";
   }
   if (!resultMode) {
@@ -1521,7 +1565,10 @@ function appendMapPaths(parent, mapItems, targetCodes, selectedCodes, options = 
     if (item.fillRule) {
       path.setAttribute("fill-rule", item.fillRule);
     }
-    if (options.clickable && typeof options.onMapAnswer === "function") {
+    if (options.clickable
+      && (!options.selectableCodes || options.selectableCodes.has(item.code))
+      && !options.disabledCodes?.has(item.code)
+      && typeof options.onMapAnswer === "function") {
       path.setAttribute("tabindex", "0");
       path.setAttribute("role", "button");
       path.setAttribute("aria-label", item.name ?? item.code);
@@ -1623,7 +1670,10 @@ function createOverrideMapSvg(overrideConfig, mapItems, targetCodes, selectedPre
     } else {
       path.removeAttribute("fill-rule");
     }
-    if (options.clickable && typeof options.onMapAnswer === "function") {
+    if (options.clickable
+      && (!options.selectableCodes || options.selectableCodes.has(code))
+      && !options.disabledCodes?.has(code)
+      && typeof options.onMapAnswer === "function") {
       path.setAttribute("tabindex", "0");
       path.setAttribute("role", "button");
       path.setAttribute("aria-label", item?.name ?? code);
@@ -1808,31 +1858,40 @@ function createLocalPlaceMapSvg(question, selectedCodes = new Set(), options = {
 
 function renderMapQuestion(question) {
   mapQuestionEl.innerHTML = "";
+  const selfSelectionOptions = isSelfSelectedMapAnswerMode()
+    ? {
+      hideTarget: true,
+      clickable: true,
+      selectableCodes: selfSelectableMapCodes(),
+      disabledCodes: completedSelfSelectedMapCodes,
+      onMapAnswer: selectSelfChosenMapTarget
+    }
+    : null;
   if (isLocalPlaceMapMode()) {
     mapQuestionEl.appendChild(createLocalPlaceMapSvg(
       question,
-      new Set(),
-      isMapClickMode()
+      selfSelectedMapCodes,
+      selfSelectionOptions ?? (isMapClickMode()
         ? {
           hideTarget: true,
           clickable: true,
           onMapAnswer: answerMapClick
         }
-        : {}
+        : {})
     ));
     return;
   }
   mapQuestionEl.appendChild(createQuestionMapSvg(
     question,
     selectedPrefectures()[0],
-    new Set(),
-    isMapClickMode()
+    selfSelectedMapCodes,
+    selfSelectionOptions ?? (isMapClickMode()
       ? {
         hideTarget: true,
         clickable: true,
         onMapAnswer: answerMapClick
       }
-      : {}
+      : {})
   ));
 }
 
@@ -2094,6 +2153,7 @@ function updateQuestionCountOptions() {
     ? shinkansenStationsForSettings().length
     : roadQuizMode
       ? roadQuizRoutesForSettings().length
+    : isSelfSelectedMapAnswerMode(quizMode) ? selfSelectableMapTargetCount(quizMode)
     : localPlaceMode ? selectedLocalPlaceQuestionCount() : availableQuestions().length;
   const provisionalLocalPlaceCount = localPlaceMode && rawCount == null && selectedLocalPlaceMunicipalityMetadata();
   const count = provisionalLocalPlaceCount ? 100 : rawCount;
@@ -2144,7 +2204,7 @@ function updateQuestionCountOptions() {
     setupMessageEl.textContent = shinkansenMode
       ? `${selectedShinkansenRoute()}の駅名を${selectedShinkansenDirection() === "down" ? "下り" : "上り"}順で回答します。`
       : roadQuizMode
-      ? `県を選び、地図上で赤く示される${roadTypeLabel()}の番号を回答します。`
+      ? `県を選び、地図上から${roadTypeLabel()}を自由に選択して路線番号を回答します。`
       : privateQuiz
       ? `プライベートクイズ「${privateQuiz.title}」の条件を選んで開始してください。`
       : areaCodeMode
@@ -2202,7 +2262,7 @@ function createOptionButton(option) {
       button.disabled = true;
     } else if (pendingPrefectureSelections.includes(option)) {
       button.classList.add("selected");
-    } else if (locked) {
+    } else if (locked || (isSelfSelectedMapAnswerMode() && !selfSelectedMapQuestion)) {
       button.disabled = true;
     }
     button.setAttribute("aria-pressed", pendingPrefectureSelections.includes(option) ? "true" : "false");
@@ -2236,7 +2296,8 @@ function updateRegionGroupCheckboxes() {
 
 function updateAnswerSubmitState() {
   const hasGroupedSelection = selectedCorrectPrefectures.length + pendingPrefectureSelections.length > 0;
-  answerSubmitButtonEl.disabled = !currentQuestion || locked || (
+  answerSubmitButtonEl.disabled = !currentQuestion || locked
+    || (isSelfSelectedMapAnswerMode() && !selfSelectedMapQuestion) || (
     groupedSelectionMode ? !hasGroupedSelection : optionsEl.childElementCount === 0
   );
 }
@@ -2353,7 +2414,7 @@ function answerCandidatesForCurrentMode() {
 
 function setOptionsDisabled(disabled) {
   document.querySelectorAll(".pref-button").forEach((button) => {
-    button.disabled = disabled;
+    button.disabled = disabled || (isSelfSelectedMapAnswerMode() && !selfSelectedMapQuestion);
   });
   document.querySelectorAll(".option-region-checkbox").forEach((checkbox) => {
     checkbox.disabled = disabled;
@@ -2414,6 +2475,59 @@ function recordMapAnswerResult(quizMode, selectedPrefectureName, correctCodes, i
   });
 }
 
+function selfSelectedQuestionForMapCode(selectedCode, selectedName) {
+  const quizMode = currentQuizMode();
+  if (quizMode === "map") {
+    const municipality = matchingMapMunicipalities().find((item) => item.code === selectedCode);
+    return municipality ? {
+      name: municipality.name,
+      prefectures: [municipality.name],
+      codes: [municipality.code]
+    } : null;
+  }
+  if (quizMode === "mapAreaCode") {
+    const areaCodes = matchingMapAreaCodes()
+      .filter((question) => question.codes.includes(selectedCode))
+      .map((question) => question.name);
+    if (areaCodes.length === 0) return null;
+    return {
+      name: selectedName ?? mapMunicipalityNameByCode(selectedCode),
+      prefectures: [...new Set(areaCodes)],
+      codes: [selectedCode]
+    };
+  }
+  if (quizMode === "localPlaceMap") {
+    const place = matchingLocalPlaces().find((item) => (item.codes ?? [item.code]).includes(selectedCode));
+    return place ? {
+      name: place.name,
+      prefectures: [place.name],
+      codes: place.codes ?? [place.code],
+      localPlaceMunicipalityCode: selectedLocalPlaceMunicipality()?.code
+    } : null;
+  }
+  return null;
+}
+
+function selectSelfChosenMapTarget(selectedCode, selectedName) {
+  if (locked || !isSelfSelectedMapAnswerMode() || completedSelfSelectedMapCodes.has(selectedCode)) return;
+  const selectedQuestion = selfSelectedQuestionForMapCode(selectedCode, selectedName);
+  if (!selectedQuestion || completedSelfSelectedTargetIds.has(selfSelectedTargetId(selectedQuestion))) return;
+
+  currentQuestion = selectedQuestion;
+  questionPool[answered] = selectedQuestion;
+  selfSelectedMapQuestion = true;
+  selfSelectedMapCodes = new Set(selectedQuestion.codes);
+  selectedCorrectPrefectures = [];
+  pendingPrefectureSelections = [];
+  groupedSelectionMode = false;
+  answerFilterEl.value = "";
+  renderMapQuestion(currentQuestion);
+  renderOptions();
+  setOptionsDisabled(false);
+  feedbackEl.textContent = "選択した場所の答えを選んでください。";
+  feedbackEl.className = "feedback";
+}
+
 function answerMapClick(selectedCode, selectedName, selectedPath) {
   if (locked || !currentQuestion || !isMapClickMode()) return;
 
@@ -2463,6 +2577,8 @@ function nextQuestion(options = {}) {
   selectedCorrectPrefectures = [];
   pendingPrefectureSelections = [];
   groupedSelectionMode = false;
+  selfSelectedMapQuestion = false;
+  selfSelectedMapCodes = new Set();
 
   document.querySelectorAll(".pref-button").forEach((button) => {
     button.classList.remove("correct", "wrong");
@@ -2523,22 +2639,24 @@ function nextQuestion(options = {}) {
     : isPairImageQuizMode(quizMode)
       ? imageQuizPrompt(quizMode)
       : quizMode === "map"
-        ? "赤色で示された市区町村は？"
+        ? "地図から市区町村を1つ選び、その名前を回答してください"
       : quizMode === "municipalityMap"
         ? "この市区町村は地図上のどこ？"
       : quizMode === "mapAreaCode"
-        ? "青色で示された地域の市外局番は？"
+        ? "地図から地域を1つ選び、その市外局番を回答してください"
       : quizMode === "areaCodeMap"
         ? "この市外局番は地図上のどこ？"
       : quizMode === "localPlaceMapClick"
         ? "この地名は地図上のどこ？"
       : isLocalPlaceMapMode(quizMode)
-        ? "青色で示された地名は？"
+        ? "地図から場所を1つ選び、その地名を回答してください"
       : isUniversityMode(quizMode)
         ? `この${universityCategoryLabel(quizMode)}の所在地は？`
       : "この自治体がある都道府県は？";
   if (!keepFeedback) {
-    feedbackEl.textContent = "";
+    feedbackEl.textContent = isSelfSelectedMapAnswerMode(quizMode)
+      ? "まず地図上の場所を選択してください。"
+      : "";
     feedbackEl.className = "feedback";
   }
   setOptionsDisabled(false);
@@ -2546,7 +2664,7 @@ function nextQuestion(options = {}) {
 }
 
 function answer(selectedPrefecture, selectedButton) {
-  if (locked || !currentQuestion) return;
+  if (locked || !currentQuestion || (isSelfSelectedMapAnswerMode() && !selfSelectedMapQuestion)) return;
   if (selectedCorrectPrefectures.includes(selectedPrefecture)) return;
   if (usesGroupedPrefectureOptions() && groupedSelectionMode) {
     togglePendingPrefecture(selectedPrefecture);
@@ -2574,7 +2692,7 @@ function answer(selectedPrefecture, selectedButton) {
 }
 
 function submitVisibleAnswers() {
-  if (locked || !currentQuestion) return;
+  if (locked || !currentQuestion || (isSelfSelectedMapAnswerMode() && !selfSelectedMapQuestion)) return;
   const visibleButtons = [...optionsEl.querySelectorAll(".pref-button")];
   const submittedOptions = groupedSelectionMode
     ? pendingPrefectureSelections
@@ -2607,11 +2725,11 @@ function finishAnswer(selectedAnswers, correct) {
       : isImagePrefectureMode(quizMode)
       ? `正解です。この${imageQuizLabel(quizMode)}は${correctText}です。`
       : quizMode === "map"
-        ? `正解です。赤色の場所は${correctText}です。`
+        ? `正解です。選択した場所は${correctText}です。`
       : quizMode === "mapAreaCode"
-        ? `正解です。青色の地域の市外局番は${correctText}です。`
+        ? `正解です。選択した場所の市外局番は${correctText}です。`
       : isLocalPlaceMapMode(quizMode)
-        ? `正解です。青色の場所は${correctText}です。`
+        ? `正解です。選択した場所は${correctText}です。`
       : isUniversityMode(quizMode)
         ? `正解です。${currentQuestion.name}は${correctText}です。`
       : `正解です。${questionNameText}は${correctText}です。`;
@@ -2624,11 +2742,11 @@ function finishAnswer(selectedAnswers, correct) {
       : isImagePrefectureMode(quizMode)
       ? `残念！この${imageQuizLabel(quizMode)}は${correctText}でした。`
       : quizMode === "map"
-        ? `残念！赤色の場所は${correctText}でした。`
+        ? `残念！選択した場所は${correctText}でした。`
       : quizMode === "mapAreaCode"
-        ? `残念！青色の地域の市外局番は${correctText}でした。`
+        ? `残念！選択した場所の市外局番は${correctText}でした。`
       : isLocalPlaceMapMode(quizMode)
-        ? `残念！青色の場所は${correctText}でした。`
+        ? `残念！選択した場所は${correctText}でした。`
       : isUniversityMode(quizMode)
         ? `残念！${currentQuestion.name}は${correctText}でした。`
       : `残念！${questionNameText}は${correctText}でした。`;
@@ -2655,6 +2773,11 @@ function finishAnswer(selectedAnswers, correct) {
         button.classList.add("correct");
       }
     });
+  }
+
+  if (isSelfSelectedMapAnswerMode(quizMode)) {
+    completedSelfSelectedTargetIds.add(selfSelectedTargetId(currentQuestion));
+    currentQuestion.codes.forEach((code) => completedSelfSelectedMapCodes.add(code));
   }
 
   answered += 1;
@@ -2910,13 +3033,15 @@ function roadRoutePath(route, project, panelBounds, data) {
   }).join("")).join("");
 }
 
-function createRoadQuizSvg(data, highlightedRoute) {
+function createRoadQuizSvg(data, highlightedRoute = null) {
   const svgNamespace = "http://www.w3.org/2000/svg";
   const svg = document.createElementNS(svgNamespace, "svg");
   svg.setAttribute("viewBox", "0 0 900 600");
   svg.setAttribute("role", "img");
-  const typeLabel = highlightedRoute.type === "prefectural" ? "県道" : "国道";
-  svg.setAttribute("aria-label", `${data.prefecture}の${typeLabel}路線図。1本の${typeLabel}が赤色で示されています。`);
+  const typeLabel = (highlightedRoute?.type ?? roadQuizType()) === "prefectural" ? "県道" : "国道";
+  svg.setAttribute("aria-label", highlightedRoute
+    ? `${data.prefecture}の${typeLabel}路線図。選択した${typeLabel}が青色で示されています。`
+    : `${data.prefecture}の${typeLabel}路線図。回答する路線を選択してください。`);
   const defs = document.createElementNS(svgNamespace, "defs");
   svg.appendChild(defs);
   const uniqueId = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
@@ -2966,6 +3091,7 @@ function createRoadQuizSvg(data, highlightedRoute) {
 
     const roads = document.createElementNS(svgNamespace, "g");
     roads.setAttribute("clip-path", `url(#${landClipId})`);
+    const selectableIds = new Set(selectableRoadRoutes.map((route) => route.id));
     data.routes.forEach((route) => {
       const d = roadRoutePath(route, project, panel.bounds, data);
       if (!d) return;
@@ -2973,13 +3099,31 @@ function createRoadQuizSvg(data, highlightedRoute) {
       path.setAttribute("d", d);
       path.setAttribute("class", `road-line ${route.type}`);
       roads.appendChild(path);
+
+      if (selectableIds.has(route.id) && !completedRoadRouteIds.has(route.id)) {
+        const hitPath = document.createElementNS(svgNamespace, "path");
+        hitPath.setAttribute("d", d);
+        hitPath.setAttribute("class", "road-line-hit");
+        hitPath.setAttribute("tabindex", "0");
+        hitPath.setAttribute("role", "button");
+        hitPath.setAttribute("aria-label", "この道路を選択");
+        hitPath.addEventListener("click", () => selectRoadRoute(route));
+        hitPath.addEventListener("keydown", (event) => {
+          if (event.key !== "Enter" && event.key !== " ") return;
+          event.preventDefault();
+          selectRoadRoute(route);
+        });
+        roads.appendChild(hitPath);
+      }
     });
 
-    const highlightedD = roadRoutePath(highlightedRoute, project, panel.bounds, data);
+    const highlightedD = highlightedRoute
+      ? roadRoutePath(highlightedRoute, project, panel.bounds, data)
+      : "";
     if (highlightedD) {
       const highlighted = document.createElementNS(svgNamespace, "path");
       highlighted.setAttribute("d", highlightedD);
-      highlighted.setAttribute("class", `road-line ${highlightedRoute.type} highlighted`);
+      highlighted.setAttribute("class", `road-line ${highlightedRoute.type} selected`);
       roads.appendChild(highlighted);
     }
     panelGroup.appendChild(roads);
@@ -3004,13 +3148,16 @@ function showRoadQuizLayout() {
   roadQuizEl.classList.remove("hidden");
   const type = roadQuizType();
   const label = roadTypeLabel();
-  roadQuizPromptEl.textContent = currentPrivateQuiz()?.prompt ?? `赤色で示された${label}は何号線ですか？`;
+  roadQuizPromptEl.textContent = `地図から${label}を1本選び、その路線番号を回答してください`;
   roadBaseLegendTextEl.textContent = label;
   roadBaseLegendLineEl.className = `road-legend-line ${type}`;
 }
 
 function startRoadQuestionSet(routes, options = {}) {
   questionPool = routes.map((route) => ({ ...route, name: route.label, prefectures: [] }));
+  selectableRoadRoutes = [...routes];
+  completedRoadRouteIds = new Set();
+  roadSelectionReady = false;
   score = 0;
   answered = 0;
   wrongAnswers = [];
@@ -3027,6 +3174,7 @@ function startRoadQuestionSet(routes, options = {}) {
 
 function nextRoadQuestion(options = {}) {
   currentQuestion = questionPool[answered] ?? null;
+  roadSelectionReady = false;
   locked = false;
   if (!currentQuestion) {
     showResult();
@@ -3034,15 +3182,30 @@ function nextRoadQuestion(options = {}) {
   }
 
   roadQuizTitleEl.textContent = activeRoadData.prefecture;
+  roadMapEl.replaceChildren(createRoadQuizSvg(activeRoadData));
+  roadAnswerInputEl.value = "";
+  roadAnswerInputEl.disabled = true;
+  roadAnswerButtonEl.disabled = true;
+  roadQuizPromptEl.textContent = `地図から${roadTypeLabel()}を1本選び、その路線番号を回答してください`;
+  if (!options.keepFeedback) {
+    roadFeedbackEl.textContent = "まず地図上の道路を選択してください。";
+    roadFeedbackEl.className = "feedback";
+  }
+  updateScoreboard();
+}
+
+function selectRoadRoute(route) {
+  if (locked || completedRoadRouteIds.has(route.id) || !selectableRoadRoutes.some((item) => item.id === route.id)) return;
+  currentQuestion = { ...route, name: route.label, prefectures: [] };
+  questionPool[answered] = currentQuestion;
+  roadSelectionReady = true;
   roadMapEl.replaceChildren(createRoadQuizSvg(activeRoadData, currentQuestion));
   roadAnswerInputEl.value = "";
   roadAnswerInputEl.disabled = false;
   roadAnswerButtonEl.disabled = false;
-  if (!options.keepFeedback) {
-    roadFeedbackEl.textContent = "";
-    roadFeedbackEl.className = "feedback";
-  }
-  updateScoreboard();
+  roadQuizPromptEl.textContent = `青色で選択した${roadTypeLabel()}は何号線ですか？`;
+  roadFeedbackEl.textContent = "選択した道路の路線番号を入力してください。";
+  roadFeedbackEl.className = "feedback";
   roadAnswerInputEl.focus();
 }
 
@@ -3053,7 +3216,7 @@ function normalizedRoadAnswer(value) {
 
 function submitRoadAnswer(event) {
   event?.preventDefault();
-  if (locked || !currentQuestion) return;
+  if (locked || !currentQuestion || !roadSelectionReady) return;
   const selected = normalizedRoadAnswer(roadAnswerInputEl.value);
   if (!selected) return;
 
@@ -3063,10 +3226,10 @@ function submitRoadAnswer(event) {
   const correct = selected === String(currentQuestion.number).replace(/^0+(?=\d)/, "");
   if (correct) {
     score += 1;
-    roadFeedbackEl.textContent = `正解です。赤色の${roadTypeLabel()}は${currentQuestion.label}です。`;
+    roadFeedbackEl.textContent = `正解です。選択した${roadTypeLabel()}は${currentQuestion.label}です。`;
     roadFeedbackEl.className = "feedback correct";
   } else {
-    roadFeedbackEl.textContent = `残念！赤色の${roadTypeLabel()}は${currentQuestion.label}でした。`;
+    roadFeedbackEl.textContent = `残念！選択した${roadTypeLabel()}は${currentQuestion.label}でした。`;
     roadFeedbackEl.className = "feedback wrong";
     wrongAnswers.push({
       name: currentQuestion.label,
@@ -3077,6 +3240,7 @@ function submitRoadAnswer(event) {
     });
   }
 
+  completedRoadRouteIds.add(currentQuestion.id);
   answered += 1;
   updateScoreboard();
   window.setTimeout(() => nextRoadQuestion({ keepFeedback: true }), 650);
@@ -3099,6 +3263,10 @@ function startQuestionSet(questions, options = {}) {
   selectedCorrectPrefectures = [];
   pendingPrefectureSelections = [];
   groupedSelectionMode = false;
+  selfSelectedMapQuestion = false;
+  selfSelectedMapCodes = new Set();
+  completedSelfSelectedTargetIds = new Set();
+  completedSelfSelectedMapCodes = new Set();
   reviewMode = isReview;
   resultReviewQuestions = [];
   currentQuestion = null;
@@ -3136,7 +3304,15 @@ async function startQuiz() {
     const candidates = shuffle(availableQuestions());
     const count = Number(questionCountEl.value);
     optionPrefectures = [...new Set(answerCandidatesForCurrentMode())];
-    startQuestionSet(candidates.slice(0, count));
+    const questions = isSelfSelectedMapAnswerMode()
+      ? Array.from({ length: count }, (_, index) => ({
+        name: `自由選択 ${index + 1}`,
+        prefectures: [],
+        codes: [],
+        localPlaceMunicipalityCode: selectedLocalPlaceMunicipality()?.code
+      }))
+      : candidates.slice(0, count);
+    startQuestionSet(questions);
     started = true;
   } catch (error) {
     showView("setup");
@@ -3398,6 +3574,13 @@ function backToSetup() {
   activeShinkansenStations = [];
   shinkansenCompleted = false;
   activeRoadData = null;
+  selfSelectedMapQuestion = false;
+  selfSelectedMapCodes = new Set();
+  completedSelfSelectedTargetIds = new Set();
+  completedSelfSelectedMapCodes = new Set();
+  roadSelectionReady = false;
+  selectableRoadRoutes = [];
+  completedRoadRouteIds = new Set();
   reviewMode = false;
   resultReviewQuestions = [];
   updateScoreboard();
